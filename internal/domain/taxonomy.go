@@ -134,3 +134,39 @@ func (t Taxonomy) CategoryAllowed(path string) bool {
 	_, ok := t.paths[path]
 	return ok
 }
+
+// FilterTags returns only the tags present in the taxonomy whitelist,
+// preserving input order and deduplicating.
+func (t Taxonomy) FilterTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(tags))
+	out := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		if _, dup := seen[tag]; dup {
+			continue
+		}
+		if _, ok := t.tags[tag]; !ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		out = append(out, tag)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// Normalize applies taxonomy rules to a note: invalid categories fall back
+// to CategoryUncategorized (preserving the original in OriginalCategory),
+// and tags are filtered against the whitelist.
+func (t Taxonomy) Normalize(n Note) Note {
+	if !t.CategoryAllowed(n.Category) {
+		n.OriginalCategory = n.Category
+		n.Category = CategoryUncategorized
+	}
+	n.Tags = t.FilterTags(n.Tags)
+	return n
+}

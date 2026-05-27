@@ -58,3 +58,38 @@ func TestTaxonomy_CategoryAllowed(t *testing.T) {
 	require.False(t, tax.CategoryAllowed(""))
 	require.False(t, tax.CategoryAllowed("WORK")) // case-sensitive by design
 }
+
+func TestTaxonomy_FilterTags(t *testing.T) {
+	tax := loadTaxonomyFile(t)
+
+	require.Equal(t, []string{"bug", "auth"}, tax.FilterTags([]string{"bug", "unknown", "auth"}))
+	require.Empty(t, tax.FilterTags([]string{"none", "alsobad"}))
+	require.Empty(t, tax.FilterTags(nil))
+	require.Equal(t, []string{"idea"}, tax.FilterTags([]string{"idea", "idea"})) // dedup
+}
+
+func TestTaxonomy_Normalize_ValidCategory(t *testing.T) {
+	tax := loadTaxonomyFile(t)
+	in := domain.Note{
+		Category: "work/projects/tms",
+		Tags:     []string{"bug", "appsheet", "ghost"},
+	}
+	out := tax.Normalize(in)
+
+	require.Equal(t, "work/projects/tms", out.Category)
+	require.Empty(t, out.OriginalCategory)
+	require.Equal(t, []string{"bug", "appsheet"}, out.Tags)
+}
+
+func TestTaxonomy_Normalize_InvalidCategoryMovesToUncategorized(t *testing.T) {
+	tax := loadTaxonomyFile(t)
+	in := domain.Note{
+		Category: "crypto/defi",
+		Tags:     []string{"idea"},
+	}
+	out := tax.Normalize(in)
+
+	require.Equal(t, domain.CategoryUncategorized, out.Category)
+	require.Equal(t, "crypto/defi", out.OriginalCategory)
+	require.Equal(t, []string{"idea"}, out.Tags)
+}
