@@ -18,7 +18,7 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	setRequired(t)
 	cfg, err := config.Load()
 	require.NoError(t, err)
-	require.Equal(t, "anthropic/claude-3.5-haiku", cfg.AtomizeModel)
+	require.Equal(t, "anthropic/claude-haiku-4.5", cfg.AtomizeModel)
 	require.Equal(t, "openai/whisper-1", cfg.TranscribeModel)
 	require.Equal(t, "/data/notes", cfg.NotesDir)
 	require.Equal(t, 120*time.Second, cfg.HTTPTimeout)

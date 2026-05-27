@@ -13,7 +13,7 @@ import (
 type Config struct {
 	OpenRouterAPIKey  string `env:"OPENROUTER_API_KEY"          env-required:"true"   env-description:"OpenRouter API key (sk-or-...)"`
 	OpenRouterBaseURL string `env:"OPENROUTER_BASE_URL"         env-default:"https://openrouter.ai/api/v1"`
-	AtomizeModel      string `env:"OPENROUTER_ATOMIZE_MODEL"    env-default:"anthropic/claude-3.5-haiku"`
+	AtomizeModel      string `env:"OPENROUTER_ATOMIZE_MODEL"    env-default:"anthropic/claude-haiku-4.5"`
 	TranscribeModel   string `env:"OPENROUTER_TRANSCRIBE_MODEL" env-default:"openai/whisper-1"`
 	HTTPReferer       string `env:"OPENROUTER_HTTP_REFERER"     env-default:"https://github.com/aleksejmetlusko/second-brain"`
 	XTitle            string `env:"OPENROUTER_X_TITLE"          env-default:"Second Brain"`
