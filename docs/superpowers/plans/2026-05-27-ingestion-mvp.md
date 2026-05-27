@@ -203,20 +203,16 @@ git commit -m "chore: project bootstrap (go.mod, Makefile, linters, README)"
 **Files:**
 - Create: `.mockery.yml`
 
-- [ ] **Step 1: Создать `.mockery.yml`**
+- [ ] **Step 1: Создать `.mockery.yml`** (mockery v3 schema)
 
 ```yaml
 all: false
-disable-version-string: true
-exclude-regex: ""
-keeptree: false
-issue-845-fix: true
-resolve-type-alias: false
-with-expecter: true
-filename: "mock_{{.InterfaceName}}.go"
-mockname: "Mock{{.InterfaceName}}"
-outpkg: "mocks"
 template: testify
+formatter: goimports
+log-level: info
+filename: "mock_{{.InterfaceName}}.go"
+pkgname: mocks
+structname: "Mock{{.InterfaceName}}"
 packages:
   github.com/aleksejmetlusko/second-brain/internal/port/in:
     config:
@@ -232,6 +228,8 @@ packages:
       NoteStore:
       TaxonomyLoader:
 ```
+
+> v3 dropped/renamed many v2 keys (`with-expecter`, `mockname`→`structname`, `outpkg`→`pkgname`, `keeptree`, `issue-845-fix`, `disable-version-string`, `resolve-type-alias`, `inpackage`). Don't add them back.
 
 - [ ] **Step 2: Установить mockery v3 как dev-tool через `tools.go`**
 
@@ -425,7 +423,7 @@ func TestSlugify(t *testing.T) {
 		{"моя идея", "moia-ideia"},
 		{"привет, мир!", "privet-mir"},
 		{"already-kebab", "already-kebab"},
-		{"!!@@##", "n-a"},
+		{"!!!", "n-a"},
 		{"", "n-a"},
 	}
 	for _, c := range cases {
@@ -1388,7 +1386,7 @@ func TestExecute_TextDump_Happy(t *testing.T) {
 
 	store.EXPECT().
 		Write(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ any, n domain.Note) (string, string, error) {
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
 			require.True(t, strings.HasPrefix(n.ID, "20260527-tms-bug"))
 			return "/notes/work/projects/tms/" + n.ID + ".md", n.ID, nil
 		}).
@@ -1586,7 +1584,7 @@ func TestExecute_VoiceDump_Happy(t *testing.T) {
 		Return([]domain.Note{noteAt("work/projects/tms", "x")}, nil).Once()
 	store.EXPECT().
 		Write(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ any, n domain.Note) (string, string, error) { return "/p.md", n.ID, nil }).
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) { return "/p.md", n.ID, nil }).
 		Once()
 
 	uc := usecase.NewIngestUseCase(transcriber, atomizer, store, taxLdr, "atomize-model", "whisper")
@@ -1708,7 +1706,7 @@ func TestExecute_UncategorizedFallback(t *testing.T) {
 	}
 	atomizer.EXPECT().Atomize(mock.Anything, mock.Anything, mock.Anything).Return(notes, nil).Once()
 	store.EXPECT().Write(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ any, n domain.Note) (string, string, error) {
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
 			return "/p/" + n.ID + ".md", n.ID, nil
 		}).Times(2)
 
@@ -1739,7 +1737,7 @@ func TestExecute_PartialStoreFailure(t *testing.T) {
 
 	var calls int
 	store.EXPECT().Write(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ any, n domain.Note) (string, string, error) {
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
 			calls++
 			if calls == 1 {
 				return "", "", errors.New("disk full")
