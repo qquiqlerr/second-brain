@@ -38,19 +38,31 @@ func TestAtomizer_ParsesValidResponse(t *testing.T) {
 	atomizer, _ := newAtomizerFakeServer(t, func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/chat/completions", r.URL.Path)
 		require.Equal(t, "Bearer test", r.Header.Get("Authorization"))
-		writeChatResponse(w, `[
-			{"title_slug":"tms-auth-bug","category":"work/projects/tms","tags":["bug"],"body":"text"},
-			{"title_slug":"sleep-idea","category":"health/sleep","tags":[],"body":"hm"}
-		]`)
+		writeChatResponse(w, `{
+			"atoms": [
+				{"title_slug":"tms-auth-bug","category":"work/projects/tms","tags":["bug"],"body":"text"},
+				{"title_slug":"sleep-idea","category":"health/sleep","tags":[],"body":"hm"}
+			],
+			"summary": {
+				"title_slug": "daily-summary",
+				"category": "work/projects/tms",
+				"tags": [],
+				"body": "## Задачи\n- t\n## Состояние\n- ok"
+			}
+		}`)
 	})
 
 	tax := buildTaxonomyForAtomizer(t)
 	notes, err := atomizer.Atomize(t.Context(), "dump", tax)
 	require.NoError(t, err)
-	require.Len(t, notes, 2)
+	require.Len(t, notes, 3)
+	require.Equal(t, domain.KindAtom, notes[0].Kind)
+	require.Equal(t, domain.KindAtom, notes[1].Kind)
+	require.Equal(t, domain.KindSummary, notes[2].Kind)
 	require.Equal(t, "work/projects/tms", notes[0].Category)
 	require.Equal(t, "tms-auth-bug", notes[0].Slug)
 	require.Equal(t, []string{"bug"}, notes[0].Tags)
+	require.Equal(t, "daily-summary", notes[2].Slug)
 }
 
 func TestAtomizer_RejectsMalformedJSON(t *testing.T) {
@@ -70,7 +82,7 @@ func TestAtomizer_RetriesOn5xx(t *testing.T) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		writeChatResponse(w, `[{"title_slug":"x","category":"work/projects/tms","tags":[],"body":""}]`)
+		writeChatResponse(w, `{"atoms":[{"title_slug":"x","category":"work/projects/tms","tags":[],"body":""}],"summary":null}`)
 	})
 
 	notes, err := atomizer.Atomize(t.Context(), "dump", buildTaxonomyForAtomizer(t))
@@ -110,7 +122,7 @@ tags:
 
 func TestAtomizer_StripsCodeFencesIfPresent(t *testing.T) {
 	atomizer, _ := newAtomizerFakeServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeChatResponse(w, "```json\n[]\n```")
+		writeChatResponse(w, "```json\n{\"atoms\":[],\"summary\":null}\n```")
 	})
 
 	notes, err := atomizer.Atomize(t.Context(), "dump", buildTaxonomyForAtomizer(t))
@@ -120,10 +132,29 @@ func TestAtomizer_StripsCodeFencesIfPresent(t *testing.T) {
 
 func TestAtomizer_StripsCodeFencesWithTrailingNewline(t *testing.T) {
 	atomizer, _ := newAtomizerFakeServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeChatResponse(w, "```json\n[]\n```\n")
+		writeChatResponse(w, "```json\n{\"atoms\":[],\"summary\":null}\n```\n")
 	})
 
 	notes, err := atomizer.Atomize(t.Context(), "dump", buildTaxonomyForAtomizer(t))
 	require.NoError(t, err)
 	require.Empty(t, notes)
+}
+
+func TestAtomizer_NoSummaryWhenMissing(t *testing.T) {
+	atomizer, _ := newAtomizerFakeServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeChatResponse(w, `{
+			"atoms": [
+				{"title_slug":"x","category":"work/projects/tms","tags":["bug"],"body":"body"}
+			],
+			"summary": null
+		}`)
+	})
+
+	notes, err := atomizer.Atomize(t.Context(), "dump", buildTaxonomyForAtomizer(t))
+	require.NoError(t, err)
+	require.Len(t, notes, 1)
+	require.Equal(t, domain.KindAtom, notes[0].Kind)
+	for _, n := range notes {
+		require.NotEqual(t, domain.KindSummary, n.Kind)
+	}
 }
