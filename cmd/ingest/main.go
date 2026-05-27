@@ -61,6 +61,11 @@ func run() error {
 	transcriber := openrouter.NewTranscriber(openrtrClient, cfg.TranscribeModel)
 
 	uc := usecase.NewIngestUseCase(transcriber, atomizer, noteStore, taxLoader, cfg.AtomizeModel, cfg.TranscribeModel)
+	uc.WithTimeouts(usecase.StageTimeouts{
+		Transcribe: cfg.TranscribeTimeout,
+		Atomize:    cfg.AtomizeTimeout,
+		Write:      cfg.FSWriteTimeout,
+	})
 
 	allowed := make(map[int64]struct{}, len(cfg.AllowedUserIDs))
 	for _, id := range cfg.AllowedUserIDs {

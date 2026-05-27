@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -222,6 +223,31 @@ func TestExecute_PartialStoreFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Notes, 1)
 	require.Len(t, result.Errors, 1)
+}
+
+func TestExecute_TranscribeTimeoutApplied(t *testing.T) {
+	transcriber := outmocks.NewMockTranscriber(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	transcriber.EXPECT().
+		Transcribe(mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(ctx context.Context, _ io.Reader, _ string) (string, error) {
+			// Slow op: simulate by waiting for ctx deadline
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Second):
+				return "should have timed out", nil
+			}
+		}).Once()
+
+	uc := usecase.NewIngestUseCase(transcriber, nil, nil, taxLdr, "a", "w")
+	uc.WithTimeouts(usecase.StageTimeouts{Transcribe: 20 * time.Millisecond})
+
+	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramVoice, AudioMIME: "audio/ogg"})
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func TestExecute_AllStoresFail(t *testing.T) {
