@@ -9,6 +9,11 @@ const SchemaVersion = "1.0"
 // a category that does not pass the taxonomy whitelist.
 const CategoryUncategorized = "uncategorized"
 
+// CategorySummaries is the fixed category for KindSummary notes. Summaries
+// are meta-notes (one per dump/day) and live in a dedicated directory
+// regardless of the topical category of the underlying atoms.
+const CategorySummaries = "summaries"
+
 // Kind classifies notes produced by the pipeline.
 const (
 	KindAtom    = "atom"

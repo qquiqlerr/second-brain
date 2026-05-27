@@ -42,7 +42,6 @@ func (r *replayAtomizer) Atomize(_ context.Context, _ string, _ domain.Taxonomy)
 		} `json:"atoms"`
 		Summary *struct {
 			TitleSlug string   `json:"title_slug"`
-			Category  string   `json:"category"`
 			Tags      []string `json:"tags"`
 			Body      string   `json:"body"`
 		} `json:"summary"`
@@ -55,7 +54,7 @@ func (r *replayAtomizer) Atomize(_ context.Context, _ string, _ domain.Taxonomy)
 		notes = append(notes, domain.Note{Kind: domain.KindAtom, Category: it.Category, Tags: it.Tags, Slug: it.TitleSlug, Body: it.Body})
 	}
 	if resp.Summary != nil && resp.Summary.TitleSlug != "" {
-		notes = append(notes, domain.Note{Kind: domain.KindSummary, Category: resp.Summary.Category, Tags: resp.Summary.Tags, Slug: resp.Summary.TitleSlug, Body: resp.Summary.Body})
+		notes = append(notes, domain.Note{Kind: domain.KindSummary, Tags: resp.Summary.Tags, Slug: resp.Summary.TitleSlug, Body: resp.Summary.Body})
 	}
 	return notes, nil
 }

@@ -103,12 +103,13 @@ func (a *Atomizer) Atomize(ctx context.Context, dump string, tax domain.Taxonomy
 		})
 	}
 	if resp.Summary != nil && resp.Summary.TitleSlug != "" {
+		// Category from the LLM (if any) is intentionally discarded — the use
+		// case's Normalize step routes summaries to domain.CategorySummaries.
 		notes = append(notes, domain.Note{
-			Kind:     domain.KindSummary,
-			Category: resp.Summary.Category,
-			Tags:     resp.Summary.Tags,
-			Slug:     resp.Summary.TitleSlug,
-			Body:     resp.Summary.Body,
+			Kind: domain.KindSummary,
+			Tags: resp.Summary.Tags,
+			Slug: resp.Summary.TitleSlug,
+			Body: resp.Summary.Body,
 		})
 	}
 	return notes, nil

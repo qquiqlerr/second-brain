@@ -159,13 +159,23 @@ func (t Taxonomy) FilterTags(tags []string) []string {
 	return out
 }
 
-// Normalize applies taxonomy rules to a note: invalid categories fall back
-// to CategoryUncategorized (preserving the original in OriginalCategory),
-// and tags are filtered against the whitelist.
+// Normalize applies taxonomy rules to a note:
+//   - summary notes are always routed to CategorySummaries (their topical
+//     category is intentionally ignored — atoms carry the topic, summaries
+//     are meta-grouped by date)
+//   - atoms with an invalid category fall back to CategoryUncategorized
+//     (preserving the original in OriginalCategory)
+//   - tags are filtered against the whitelist for both kinds
 func (t Taxonomy) Normalize(n Note) Note {
-	if !t.CategoryAllowed(n.Category) {
-		n.OriginalCategory = n.Category
-		n.Category = CategoryUncategorized
+	switch n.Kind {
+	case KindSummary:
+		n.Category = CategorySummaries
+		n.OriginalCategory = ""
+	default:
+		if !t.CategoryAllowed(n.Category) {
+			n.OriginalCategory = n.Category
+			n.Category = CategoryUncategorized
+		}
 	}
 	n.Tags = t.FilterTags(n.Tags)
 	return n

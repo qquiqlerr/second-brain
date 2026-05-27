@@ -17,11 +17,14 @@ OUTPUT FORMAT (strict): a single JSON object, no prose, no markdown fences. Sche
   ],
   "summary": {
     "title_slug": "<e.g. daily-summary or journal>",
-    "category":   "<one of: {{categories}}>",
     "tags":       ["<zero or more of: {{tags}}>"],
     "body":       "<structured markdown, see template below, <=2500 chars>"
   }
 }
+
+NOTE: the summary has no "category" — summaries are always stored in a
+dedicated location regardless of the day's topic. Atoms still need a
+category from the list above.
 
 Summary body template (use these section headers, fill what applies, omit empty sections):
 ## Задачи

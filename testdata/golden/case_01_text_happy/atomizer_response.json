@@ -15,7 +15,6 @@
   ],
   "summary": {
     "title_slug": "daily-summary",
-    "category": "work/projects/tms",
     "tags": [],
     "body": "## Задачи\n- TMS auth investigation\n## Инсайты\n- middleware refactor"
   }

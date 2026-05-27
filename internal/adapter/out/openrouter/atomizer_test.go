@@ -45,7 +45,6 @@ func TestAtomizer_ParsesValidResponse(t *testing.T) {
 			],
 			"summary": {
 				"title_slug": "daily-summary",
-				"category": "work/projects/tms",
 				"tags": [],
 				"body": "## Задачи\n- t\n## Состояние\n- ok"
 			}
@@ -63,6 +62,7 @@ func TestAtomizer_ParsesValidResponse(t *testing.T) {
 	require.Equal(t, "tms-auth-bug", notes[0].Slug)
 	require.Equal(t, []string{"bug"}, notes[0].Tags)
 	require.Equal(t, "daily-summary", notes[2].Slug)
+	require.Empty(t, notes[2].Category, "atomizer must leave summary Category empty for Normalize to set")
 }
 
 func TestAtomizer_RejectsMalformedJSON(t *testing.T) {

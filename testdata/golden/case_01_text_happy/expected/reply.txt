@@ -1,4 +1,4 @@
 ✅ Сохранено 2 заметки + саммари:
 • [tms-auth-bug] (work/projects/tms) #auth #bug
 • [tms-auth-middleware] (work/projects/tms) #idea
-📝 Саммари: [daily-summary] (work/projects/tms)
+📝 Саммари: [daily-summary] (summaries)
