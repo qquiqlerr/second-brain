@@ -1,0 +1,25 @@
+all: false
+disable-version-string: true
+exclude-regex: ""
+keeptree: false
+issue-845-fix: true
+resolve-type-alias: false
+with-expecter: true
+filename: "mock_{{.InterfaceName}}.go"
+mockname: "Mock{{.InterfaceName}}"
+outpkg: "mocks"
+template: testify
+packages:
+  github.com/aleksejmetlusko/second-brain/internal/port/in:
+    config:
+      dir: "internal/port/in/mocks"
+    interfaces:
+      IngestDumpUseCase:
+  github.com/aleksejmetlusko/second-brain/internal/port/out:
+    config:
+      dir: "internal/port/out/mocks"
+    interfaces:
+      Transcriber:
+      Atomizer:
+      NoteStore:
+      TaxonomyLoader:

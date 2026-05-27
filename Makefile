@@ -25,7 +25,7 @@ lint:
 	golangci-lint run
 
 mocks:
-	mockery
+	$(GO) tool mockery
 
 env-example:
 	$(GO) run ./cmd/envexample > .env.example
