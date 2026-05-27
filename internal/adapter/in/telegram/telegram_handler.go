@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-telegram/bot"
@@ -29,10 +30,25 @@ func (h *TelegramHandler) Handle(ctx context.Context, b *bot.Bot, update *models
 		return
 	}
 	msg := update.Message
-	in := IncomingUpdate{
-		UpdateID:   update.ID,
-		FromUserID: msg.From.ID,
+	in := h.buildIncoming(update, msg, b)
+
+	logger := slog.Default().With("update_id", update.ID, "user_id", msg.From.ID)
+	handler := RecoverMiddleware(logger, h.router.Handle)
+
+	reply, err := handler(ctx, in)
+	if err != nil {
+		logger.Error("handler error", "err", err)
+		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: "❌ внутренняя ошибка"})
+		return
 	}
+	if reply == "" {
+		return
+	}
+	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: reply})
+}
+
+func (h *TelegramHandler) buildIncoming(update *models.Update, msg *models.Message, b *bot.Bot) IncomingUpdate {
+	in := IncomingUpdate{UpdateID: update.ID, FromUserID: msg.From.ID}
 	switch {
 	case msg.Voice != nil:
 		in.Kind = UpdateVoice
@@ -48,16 +64,7 @@ func (h *TelegramHandler) Handle(ctx context.Context, b *bot.Bot, update *models
 	default:
 		in.Kind = UpdateOther
 	}
-
-	reply, err := h.router.Handle(ctx, in)
-	if err != nil {
-		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: "❌ внутренняя ошибка"})
-		return
-	}
-	if reply == "" {
-		return
-	}
-	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: reply})
+	return in
 }
 
 func (h *TelegramHandler) downloadFile(ctx context.Context, b *bot.Bot, fileID string) (io.ReadCloser, error) {
