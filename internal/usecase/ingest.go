@@ -100,7 +100,7 @@ func (u *IngestUseCase) Execute(ctx context.Context, req in.IngestRequest) (in.I
 
 		n.SchemaVersion = domain.SchemaVersion
 		n.Source = req.Source
-		n.Date = now
+		n.Date = now.Truncate(time.Second)
 		n.Ingest = domain.IngestMeta{
 			DumpID:       dumpID,
 			ModelAtomize: u.atomizeModel,
