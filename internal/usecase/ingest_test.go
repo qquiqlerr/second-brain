@@ -87,3 +87,45 @@ func TestExecute_TextDump_Happy(t *testing.T) {
 	require.Equal(t, "anthropic/claude-3.5-haiku", result.Notes[0].Ingest.ModelAtomize)
 	require.Empty(t, result.Notes[0].Ingest.ModelTranscribe, "transcribe model should be empty for text")
 }
+
+func TestExecute_VoiceDump_Happy(t *testing.T) {
+	transcriber := outmocks.NewMockTranscriber(t)
+	atomizer := outmocks.NewMockAtomizer(t)
+	store := outmocks.NewMockNoteStore(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	transcriber.EXPECT().
+		Transcribe(mock.Anything, mock.Anything, "audio/ogg").
+		Return("recognized dump", nil).Once()
+	atomizer.EXPECT().
+		Atomize(mock.Anything, "recognized dump", mock.Anything).
+		Return([]domain.Note{noteAt("work/projects/tms", "x")}, nil).Once()
+	store.EXPECT().
+		Write(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) { return "/p.md", n.ID, nil }).
+		Once()
+
+	uc := usecase.NewIngestUseCase(transcriber, atomizer, store, taxLdr, "atomize-model", "whisper")
+	result, err := uc.Execute(t.Context(), in.IngestRequest{
+		Source:    domain.SourceTelegramVoice,
+		Audio:     nil,
+		AudioMIME: "audio/ogg",
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Notes, 1)
+	require.Equal(t, "whisper", result.Notes[0].Ingest.ModelTranscribe)
+}
+
+func TestExecute_VoiceDump_EmptyTranscript(t *testing.T) {
+	transcriber := outmocks.NewMockTranscriber(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	transcriber.EXPECT().Transcribe(mock.Anything, mock.Anything, "audio/ogg").
+		Return("   \n  ", nil).Once()
+
+	uc := usecase.NewIngestUseCase(transcriber, nil, nil, taxLdr, "a", "w")
+	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramVoice, AudioMIME: "audio/ogg"})
+	require.ErrorIs(t, err, domain.ErrEmptyDump)
+}
