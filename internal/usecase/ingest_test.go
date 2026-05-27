@@ -35,6 +35,7 @@ tags:
 func noteAt(category, slug string) domain.Note {
 	return domain.Note{
 		SchemaVersion: domain.SchemaVersion,
+		Kind:          domain.KindAtom,
 		Date:          time.Date(2026, 5, 27, 22, 40, 0, 0, time.UTC),
 		Source:        domain.SourceTelegramText,
 		Category:      category,
@@ -248,6 +249,57 @@ func TestExecute_TranscribeTimeoutApplied(t *testing.T) {
 	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramVoice, AudioMIME: "audio/ogg"})
 	require.Error(t, err)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestExecute_SummaryPersisted(t *testing.T) {
+	transcriber := outmocks.NewMockTranscriber(t)
+	atomizer := outmocks.NewMockAtomizer(t)
+	store := outmocks.NewMockNoteStore(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	tax := buildTaxonomy(t)
+	taxLdr.EXPECT().Load(mock.Anything).Return(tax, nil).Once()
+
+	summary := domain.Note{
+		Kind:     domain.KindSummary,
+		Category: "work/projects/tms",
+		Tags:     []string{},
+		Slug:     "daily-summary",
+		Body:     "## Задачи\n- something",
+	}
+	atom := domain.Note{
+		Kind:     domain.KindAtom,
+		Category: "work/projects/tms",
+		Tags:     []string{"bug"},
+		Slug:     "an-atom",
+		Body:     "body",
+	}
+	atomizer.EXPECT().
+		Atomize(mock.Anything, "dump", mock.Anything).
+		Return([]domain.Note{atom, summary}, nil).Once()
+
+	store.EXPECT().
+		Write(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
+			return "/notes/" + n.ID + ".md", n.ID, nil
+		}).Times(2)
+
+	uc := usecase.NewIngestUseCase(transcriber, atomizer, store, taxLdr, "a-model", "w-model")
+	result, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "dump"})
+	require.NoError(t, err)
+	require.Len(t, result.Notes, 2)
+
+	// both share dump_id
+	require.Equal(t, result.Notes[0].Ingest.DumpID, result.Notes[1].Ingest.DumpID)
+
+	// one of them is the summary
+	summaryCount := 0
+	for _, n := range result.Notes {
+		if n.Kind == domain.KindSummary {
+			summaryCount++
+		}
+	}
+	require.Equal(t, 1, summaryCount)
 }
 
 func TestExecute_AllStoresFail(t *testing.T) {
