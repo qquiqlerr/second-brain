@@ -33,18 +33,29 @@ func (r *replayAtomizer) Atomize(_ context.Context, _ string, _ domain.Taxonomy)
 	if err != nil {
 		return nil, err
 	}
-	var items []struct {
-		TitleSlug string   `json:"title_slug"`
-		Category  string   `json:"category"`
-		Tags      []string `json:"tags"`
-		Body      string   `json:"body"`
+	var resp struct {
+		Atoms []struct {
+			TitleSlug string   `json:"title_slug"`
+			Category  string   `json:"category"`
+			Tags      []string `json:"tags"`
+			Body      string   `json:"body"`
+		} `json:"atoms"`
+		Summary *struct {
+			TitleSlug string   `json:"title_slug"`
+			Category  string   `json:"category"`
+			Tags      []string `json:"tags"`
+			Body      string   `json:"body"`
+		} `json:"summary"`
 	}
-	if err := json.Unmarshal(data, &items); err != nil {
+	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, err
 	}
-	notes := make([]domain.Note, 0, len(items))
-	for _, it := range items {
-		notes = append(notes, domain.Note{Category: it.Category, Tags: it.Tags, Slug: it.TitleSlug, Body: it.Body})
+	notes := make([]domain.Note, 0, len(resp.Atoms)+1)
+	for _, it := range resp.Atoms {
+		notes = append(notes, domain.Note{Kind: domain.KindAtom, Category: it.Category, Tags: it.Tags, Slug: it.TitleSlug, Body: it.Body})
+	}
+	if resp.Summary != nil && resp.Summary.TitleSlug != "" {
+		notes = append(notes, domain.Note{Kind: domain.KindSummary, Category: resp.Summary.Category, Tags: resp.Summary.Tags, Slug: resp.Summary.TitleSlug, Body: resp.Summary.Body})
 	}
 	return notes, nil
 }

@@ -1,3 +1,6 @@
-[
-  {"title_slug": "defi-fees", "category": "crypto/defi", "tags": [], "body": "Комиссии растут."}
-]
+{
+  "atoms": [
+    {"title_slug": "defi-fees", "category": "crypto/defi", "tags": [], "body": "Комиссии растут."}
+  ],
+  "summary": null
+}
