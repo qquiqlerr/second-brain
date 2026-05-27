@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -163,4 +164,78 @@ func TestExecute_AtomizerReturnsZeroNotes(t *testing.T) {
 	uc := usecase.NewIngestUseCase(nil, atomizer, nil, taxLdr, "a", "w")
 	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "x"})
 	require.ErrorIs(t, err, domain.ErrAtomizerNoNotes)
+}
+
+func TestExecute_UncategorizedFallback(t *testing.T) {
+	atomizer := outmocks.NewMockAtomizer(t)
+	store := outmocks.NewMockNoteStore(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	notes := []domain.Note{
+		noteAt("work/projects/tms", "valid"),
+		noteAt("crypto/defi", "alien"),
+	}
+	atomizer.EXPECT().Atomize(mock.Anything, mock.Anything, mock.Anything).Return(notes, nil).Once()
+	store.EXPECT().Write(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
+			return "/p/" + n.ID + ".md", n.ID, nil
+		}).Times(2)
+
+	uc := usecase.NewIngestUseCase(nil, atomizer, store, taxLdr, "a", "w")
+	result, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "x"})
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Uncategorized)
+	require.Len(t, result.Notes, 2)
+
+	uncatNotes := 0
+	for _, n := range result.Notes {
+		if n.Category == domain.CategoryUncategorized {
+			require.Equal(t, "crypto/defi", n.OriginalCategory)
+			uncatNotes++
+		}
+	}
+	require.Equal(t, 1, uncatNotes)
+}
+
+func TestExecute_PartialStoreFailure(t *testing.T) {
+	atomizer := outmocks.NewMockAtomizer(t)
+	store := outmocks.NewMockNoteStore(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	atomizer.EXPECT().Atomize(mock.Anything, mock.Anything, mock.Anything).
+		Return([]domain.Note{noteAt("work/projects/tms", "a"), noteAt("work/projects/tms", "b")}, nil).Once()
+
+	var calls int
+	store.EXPECT().Write(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
+			calls++
+			if calls == 1 {
+				return "", "", errors.New("disk full")
+			}
+			return "/p/" + n.ID + ".md", n.ID, nil
+		}).Times(2)
+
+	uc := usecase.NewIngestUseCase(nil, atomizer, store, taxLdr, "a", "w")
+	result, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "x"})
+	require.NoError(t, err)
+	require.Len(t, result.Notes, 1)
+	require.Len(t, result.Errors, 1)
+}
+
+func TestExecute_AllStoresFail(t *testing.T) {
+	atomizer := outmocks.NewMockAtomizer(t)
+	store := outmocks.NewMockNoteStore(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	atomizer.EXPECT().Atomize(mock.Anything, mock.Anything, mock.Anything).
+		Return([]domain.Note{noteAt("work/projects/tms", "a")}, nil).Once()
+	store.EXPECT().Write(mock.Anything, mock.Anything).
+		Return("", "", errors.New("permission denied")).Once()
+
+	uc := usecase.NewIngestUseCase(nil, atomizer, store, taxLdr, "a", "w")
+	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "x"})
+	require.Error(t, err)
 }
