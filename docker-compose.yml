@@ -1,0 +1,13 @@
+services:
+  ingest:
+    build: .
+    image: second-brain/ingest:dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Europe/Moscow
+      NOTES_DIR: /data/notes
+      CONFIG_DIR: /etc/second-brain
+    volumes:
+      - ./data/notes:/data/notes
+      - ./config:/etc/second-brain
