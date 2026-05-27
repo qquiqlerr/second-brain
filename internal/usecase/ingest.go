@@ -16,6 +16,13 @@ import (
 	"github.com/aleksejmetlusko/second-brain/internal/port/out"
 )
 
+// StageTimeouts caps each pipeline stage. Zero = no timeout for that stage.
+type StageTimeouts struct {
+	Transcribe time.Duration
+	Atomize    time.Duration
+	Write      time.Duration
+}
+
 // IngestUseCase implements in.IngestDumpUseCase. Use NewIngestUseCase to construct.
 type IngestUseCase struct {
 	transcriber out.Transcriber
@@ -27,6 +34,7 @@ type IngestUseCase struct {
 	transcribeModel string
 	now             func() time.Time
 	fixedDumpID     string
+	timeouts        StageTimeouts
 }
 
 // NewIngestUseCase wires the use case with its driven ports.
@@ -64,7 +72,9 @@ func (u *IngestUseCase) Execute(ctx context.Context, req in.IngestRequest) (in.I
 	text := req.Text
 	transcribeUsed := false
 	if req.Source == domain.SourceTelegramVoice {
-		text, err = u.transcriber.Transcribe(ctx, req.Audio, req.AudioMIME)
+		tctx, tcancel := withOptionalTimeout(ctx, u.timeouts.Transcribe)
+		text, err = u.transcriber.Transcribe(tctx, req.Audio, req.AudioMIME)
+		tcancel()
 		if err != nil {
 			return in.IngestResult{}, fmt.Errorf("transcribe: %w", err)
 		}
@@ -77,7 +87,9 @@ func (u *IngestUseCase) Execute(ctx context.Context, req in.IngestRequest) (in.I
 		return in.IngestResult{}, domain.ErrEmptyDump
 	}
 
-	notes, err := u.atomizer.Atomize(ctx, text, tax)
+	actx, acancel := withOptionalTimeout(ctx, u.timeouts.Atomize)
+	notes, err := u.atomizer.Atomize(actx, text, tax)
+	acancel()
 	if err != nil {
 		return in.IngestResult{}, fmt.Errorf("atomize: %w", err)
 	}
@@ -100,7 +112,7 @@ func (u *IngestUseCase) Execute(ctx context.Context, req in.IngestRequest) (in.I
 
 		n.SchemaVersion = domain.SchemaVersion
 		n.Source = req.Source
-		n.Date = now
+		n.Date = now.Truncate(time.Second)
 		n.Ingest = domain.IngestMeta{
 			DumpID:       dumpID,
 			ModelAtomize: u.atomizeModel,
@@ -111,7 +123,9 @@ func (u *IngestUseCase) Execute(ctx context.Context, req in.IngestRequest) (in.I
 		n.Slug = domain.Slugify(n.Slug)
 		n.ID = domain.BuildID(n.Date, n.Slug)
 
-		path, finalID, writeErr := u.store.Write(ctx, n)
+		wctx, wcancel := withOptionalTimeout(ctx, u.timeouts.Write)
+		path, finalID, writeErr := u.store.Write(wctx, n)
+		wcancel()
 		if writeErr != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("write %s: %w", n.ID, writeErr))
 			continue
@@ -135,4 +149,19 @@ func (u *IngestUseCase) WithFixedNow(now func() time.Time) {
 // WithFixedDumpID forces a deterministic dump ID for golden tests.
 func (u *IngestUseCase) WithFixedDumpID(id string) {
 	u.fixedDumpID = id
+}
+
+// WithTimeouts applies per-stage timeouts. Zero values disable the timeout
+// for that stage.
+func (u *IngestUseCase) WithTimeouts(t StageTimeouts) {
+	u.timeouts = t
+}
+
+// withOptionalTimeout returns ctx unchanged with a no-op cancel when d is 0
+// or negative, or a derived context with the given timeout otherwise.
+func withOptionalTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	if d <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, d)
 }

@@ -29,13 +29,27 @@ cp testdata/taxonomy.yml.example config/taxonomy.yml
 
 ## Run
 
-```bash
-# локально
-make build && ./bin/ingest
+### Docker (recommended)
 
-# Docker
-make run     # docker compose up --build
+`docker compose` подхватывает `.env` автоматически и монтирует `./config` и `./data/notes`:
+
+```bash
+make run
+# или: docker compose up --build
 ```
+
+### Локально (без Docker)
+
+`.env` shell не загружает — нужно явно source'нуть и переопределить пути:
+
+```bash
+make build
+mkdir -p data/notes
+set -a; source .env; set +a
+CONFIG_DIR=$PWD/config NOTES_DIR=$PWD/data/notes ./bin/ingest
+```
+
+`CONFIG_DIR` по умолчанию `/etc/second-brain` (это путь внутри Docker-контейнера). При локальном запуске обязательно переопредели на `$PWD/config`, иначе бот не найдёт `taxonomy.yml`.
 
 ## Test
 

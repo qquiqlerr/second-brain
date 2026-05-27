@@ -14,7 +14,8 @@ RULES:
 - title_slug: lowercase ASCII kebab-case, only [a-z0-9-], <=40 chars, no trailing hyphen
 - category: MUST be exactly one of the allowed paths above; if nothing fits, return "uncategorized"
 - tags: only from the allowed list; if nothing fits, return []
-- body: short, self-contained markdown
+- body: short, self-contained markdown — preserve the original language of the dump (do not translate)
+- title_slug must remain ASCII kebab-case even when body is in another language
 - If the dump contains zero ideas, return []
 
 Return only the JSON array.
