@@ -129,3 +129,38 @@ func TestExecute_VoiceDump_EmptyTranscript(t *testing.T) {
 	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramVoice, AudioMIME: "audio/ogg"})
 	require.ErrorIs(t, err, domain.ErrEmptyDump)
 }
+
+func TestExecute_TaxonomyLoadFails(t *testing.T) {
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+	taxLdr.EXPECT().Load(mock.Anything).Return(domain.Taxonomy{}, domain.ErrTaxonomyMissing).Once()
+
+	uc := usecase.NewIngestUseCase(nil, nil, nil, taxLdr, "a", "w")
+	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "x"})
+	require.ErrorIs(t, err, domain.ErrTaxonomyMissing)
+}
+
+func TestExecute_AtomizerFails(t *testing.T) {
+	atomizer := outmocks.NewMockAtomizer(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	atomizer.EXPECT().Atomize(mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, domain.ErrAtomizerBadResponse).Once()
+
+	uc := usecase.NewIngestUseCase(nil, atomizer, nil, taxLdr, "a", "w")
+	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "x"})
+	require.ErrorIs(t, err, domain.ErrAtomizerBadResponse)
+}
+
+func TestExecute_AtomizerReturnsZeroNotes(t *testing.T) {
+	atomizer := outmocks.NewMockAtomizer(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	taxLdr.EXPECT().Load(mock.Anything).Return(buildTaxonomy(t), nil).Once()
+	atomizer.EXPECT().Atomize(mock.Anything, mock.Anything, mock.Anything).
+		Return([]domain.Note{}, nil).Once()
+
+	uc := usecase.NewIngestUseCase(nil, atomizer, nil, taxLdr, "a", "w")
+	_, err := uc.Execute(t.Context(), in.IngestRequest{Source: domain.SourceTelegramText, Text: "x"})
+	require.ErrorIs(t, err, domain.ErrAtomizerNoNotes)
+}
