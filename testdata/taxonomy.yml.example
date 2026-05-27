@@ -10,6 +10,8 @@ categories:
     learning:
     finance:
     relationships:
+    home:
+    purchases:
   health:
     workouts:
     nutrition:
@@ -40,3 +42,6 @@ tags:
   - run
   - gym
   - energy
+  - purchase
+  - gear
+  - product
