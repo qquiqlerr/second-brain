@@ -1,0 +1,30 @@
+version: "1.0"
+categories:
+  work:
+    projects:
+      - tms
+      - ingestion
+    meetings:
+    notes:
+  personal:
+    learning:
+    finance:
+    relationships:
+  health:
+    workouts:
+    nutrition:
+    sleep:
+tags:
+  - appsheet
+  - backend
+  - frontend
+  - auth
+  - bug
+  - refactor
+  - performance
+  - idea
+  - todo
+  - insight
+  - question
+  - decision
+  - mood
