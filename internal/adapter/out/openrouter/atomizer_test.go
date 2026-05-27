@@ -117,3 +117,13 @@ func TestAtomizer_StripsCodeFencesIfPresent(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, notes)
 }
+
+func TestAtomizer_StripsCodeFencesWithTrailingNewline(t *testing.T) {
+	atomizer, _ := newAtomizerFakeServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeChatResponse(w, "```json\n[]\n```\n")
+	})
+
+	notes, err := atomizer.Atomize(t.Context(), "dump", buildTaxonomyForAtomizer(t))
+	require.NoError(t, err)
+	require.Empty(t, notes)
+}

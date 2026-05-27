@@ -116,7 +116,7 @@ func stripCodeFence(s string) string {
 		if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
 			rest = rest[nl+1:]
 		}
-		if cut, ok := strings.CutSuffix(rest, "```"); ok {
+		if cut, ok := strings.CutSuffix(strings.TrimRight(rest, "\n\r "), "```"); ok {
 			return strings.TrimSpace(cut)
 		}
 	}
