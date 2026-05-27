@@ -1,0 +1,95 @@
+// Command ingest is the entry point for the Ingestion MVP service.
+// It wires adapters together and runs the Telegram long-poll loop.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"github.com/go-telegram/bot"
+
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/in/telegram"
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/fs"
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/openrouter"
+	"github.com/aleksejmetlusko/second-brain/internal/config"
+	"github.com/aleksejmetlusko/second-brain/internal/usecase"
+)
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+
+	logger := newLogger(cfg.LogLevel)
+	slog.SetDefault(logger)
+
+	if _, err := time.LoadLocation(cfg.TZ); err != nil {
+		return fmt.Errorf("invalid TZ %s: %w", cfg.TZ, err)
+	}
+
+	taxLoader := fs.NewTaxonomyLoader(filepath.Join(cfg.ConfigDir, "taxonomy.yml"), time.Minute)
+	if _, err := taxLoader.Load(context.Background()); err != nil {
+		return fmt.Errorf("initial taxonomy load: %w", err)
+	}
+
+	noteStore := fs.NewNoteStore(cfg.NotesDir)
+
+	openrtrClient := openrouter.New(openrouter.ClientConfig{
+		APIKey:      cfg.OpenRouterAPIKey,
+		BaseURL:     cfg.OpenRouterBaseURL,
+		HTTPReferer: cfg.HTTPReferer,
+		XTitle:      cfg.XTitle,
+		HTTPTimeout: cfg.HTTPTimeout,
+		Retry:       openrouter.DefaultRetryPolicy(),
+	})
+	atomizer := openrouter.NewAtomizer(openrtrClient, cfg.AtomizeModel)
+	transcriber := openrouter.NewTranscriber(openrtrClient, cfg.TranscribeModel)
+
+	uc := usecase.NewIngestUseCase(transcriber, atomizer, noteStore, taxLoader, cfg.AtomizeModel, cfg.TranscribeModel)
+
+	allowed := make(map[int64]struct{}, len(cfg.AllowedUserIDs))
+	for _, id := range cfg.AllowedUserIDs {
+		allowed[id] = struct{}{}
+	}
+	dedup := telegram.NewUpdateDedup(1024)
+	router := telegram.NewRouter(uc, allowed, dedup, logger)
+	tgHandler := telegram.NewTelegramHandler(router, cfg.TelegramBotToken)
+
+	b, err := bot.New(cfg.TelegramBotToken, bot.WithDefaultHandler(tgHandler.Handle))
+	if err != nil {
+		return fmt.Errorf("init telegram bot: %w", err)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	logger.Info("starting bot", "atomize_model", cfg.AtomizeModel, "transcribe_model", cfg.TranscribeModel, "notes_dir", cfg.NotesDir)
+	b.Start(ctx)
+
+	if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	logger.Info("shutdown complete")
+	return nil
+}
+
+func newLogger(level string) *slog.Logger {
+	var lvl slog.Level
+	_ = lvl.UnmarshalText([]byte(level))
+	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
+}
