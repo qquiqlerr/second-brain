@@ -93,3 +93,17 @@ func TestTaxonomy_Normalize_InvalidCategoryMovesToUncategorized(t *testing.T) {
 	require.Equal(t, "crypto/defi", out.OriginalCategory)
 	require.Equal(t, []string{"idea"}, out.Tags)
 }
+
+func TestTaxonomy_Normalize_SummaryRoutedToSummariesCategory(t *testing.T) {
+	tax := loadTaxonomyFile(t)
+	in := domain.Note{
+		Kind:     domain.KindSummary,
+		Category: "work/projects/tms", // whatever LLM picked is ignored
+		Tags:     []string{"idea", "unknown-tag"},
+	}
+	out := tax.Normalize(in)
+
+	require.Equal(t, domain.CategorySummaries, out.Category)
+	require.Empty(t, out.OriginalCategory)
+	require.Equal(t, []string{"idea"}, out.Tags) // tag filter still applies
+}

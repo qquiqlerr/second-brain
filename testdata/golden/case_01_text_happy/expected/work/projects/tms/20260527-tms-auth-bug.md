@@ -3,6 +3,7 @@ id: 20260527-tms-auth-bug
 schema_version: "1.0"
 date: 2026-05-27T22:40:00+03:00
 source: telegram-text
+kind: atom
 category: work/projects/tms
 tags:
   - auth

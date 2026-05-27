@@ -50,6 +50,11 @@ type atomItem struct {
 	Body      string   `json:"body"`
 }
 
+type atomizerResponse struct {
+	Atoms   []atomItem `json:"atoms"`
+	Summary *atomItem  `json:"summary"`
+}
+
 // Atomize sends one request to OpenRouter and returns the parsed notes.
 // Returns domain.ErrAtomizerBadResponse if the response cannot be parsed.
 func (a *Atomizer) Atomize(ctx context.Context, dump string, tax domain.Taxonomy) ([]domain.Note, error) {
@@ -83,30 +88,41 @@ func (a *Atomizer) Atomize(ctx context.Context, dump string, tax domain.Taxonomy
 		return nil, err
 	}
 
-	items, err := parseAtomItems(content)
+	resp, err := parseAtomizerResponse(content)
 	if err != nil {
 		return nil, err
 	}
-	notes := make([]domain.Note, 0, len(items))
-	for _, it := range items {
+	notes := make([]domain.Note, 0, len(resp.Atoms)+1)
+	for _, it := range resp.Atoms {
 		notes = append(notes, domain.Note{
+			Kind:     domain.KindAtom,
 			Category: it.Category,
 			Tags:     it.Tags,
 			Slug:     it.TitleSlug,
 			Body:     it.Body,
 		})
 	}
+	if resp.Summary != nil && resp.Summary.TitleSlug != "" {
+		// Category from the LLM (if any) is intentionally discarded — the use
+		// case's Normalize step routes summaries to domain.CategorySummaries.
+		notes = append(notes, domain.Note{
+			Kind: domain.KindSummary,
+			Tags: resp.Summary.Tags,
+			Slug: resp.Summary.TitleSlug,
+			Body: resp.Summary.Body,
+		})
+	}
 	return notes, nil
 }
 
-func parseAtomItems(s string) ([]atomItem, error) {
+func parseAtomizerResponse(s string) (atomizerResponse, error) {
 	s = strings.TrimSpace(s)
 	s = stripCodeFence(s)
-	var items []atomItem
-	if err := json.Unmarshal([]byte(s), &items); err != nil {
-		return nil, fmt.Errorf("%w: %v", domain.ErrAtomizerBadResponse, err)
+	var resp atomizerResponse
+	if err := json.Unmarshal([]byte(s), &resp); err != nil {
+		return atomizerResponse{}, fmt.Errorf("%w: %v", domain.ErrAtomizerBadResponse, err)
 	}
-	return items, nil
+	return resp, nil
 }
 
 // stripCodeFence removes a leading ```...``` markdown fence if the LLM

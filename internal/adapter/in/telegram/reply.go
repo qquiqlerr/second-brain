@@ -23,14 +23,31 @@ func FormatReply(r in.IngestResult, topErr error) string {
 		return "🤔 ничего не сохранилось"
 	}
 
+	var atoms []domain.Note
+	var summary *domain.Note
+	for i, n := range r.Notes {
+		if n.Kind == domain.KindSummary {
+			summary = &r.Notes[i]
+			continue
+		}
+		atoms = append(atoms, n)
+	}
+
 	var b strings.Builder
-	fmt.Fprintf(&b, "✅ Сохранено %s:\n", pluralNotes(len(r.Notes)))
-	for _, n := range r.Notes {
+	if summary != nil {
+		fmt.Fprintf(&b, "✅ Сохранено %s + саммари:\n", pluralNotes(len(atoms)))
+	} else {
+		fmt.Fprintf(&b, "✅ Сохранено %s:\n", pluralNotes(len(atoms)))
+	}
+	for _, n := range atoms {
 		fmt.Fprintf(&b, "• [%s] (%s)", n.Slug, n.Category)
 		for _, tag := range n.Tags {
 			fmt.Fprintf(&b, " #%s", tag)
 		}
 		b.WriteByte('\n')
+	}
+	if summary != nil {
+		fmt.Fprintf(&b, "📝 Саммари: [%s] (%s)\n", summary.Slug, summary.Category)
 	}
 	if r.Uncategorized > 0 {
 		fmt.Fprintf(&b, "📦 %s в Uncategorized\n", pluralUncat(r.Uncategorized))
