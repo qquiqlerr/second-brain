@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strings"
 	"testing"
 	"time"
 
@@ -66,7 +65,10 @@ func TestExecute_TextDump_Happy(t *testing.T) {
 	store.EXPECT().
 		Write(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
-			require.True(t, strings.HasPrefix(n.ID, "20260527-tms-bug"))
+			// ID = YYYYMMDD-slug; assert the slug portion came from the atomizer
+			// without hardcoding today's date (test was breaking when run on a
+			// later day than it was authored).
+			require.Regexp(t, `^\d{8}-tms-bug-[ab]$`, n.ID)
 			return "/notes/work/projects/tms/" + n.ID + ".md", n.ID, nil
 		}).
 		Times(2)
