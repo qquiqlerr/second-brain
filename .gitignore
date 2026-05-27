@@ -1,0 +1,21 @@
+# binaries
+/bin/
+/dist/
+ingest
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# env / secrets
+.env
+.env.local
+
+# data & runtime
+/data/
+/config/taxonomy.yml
+
+# test artifacts
+coverage.out
+*.test
