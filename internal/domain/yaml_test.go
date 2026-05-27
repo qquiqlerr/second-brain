@@ -16,6 +16,7 @@ func sampleNote() domain.Note {
 		SchemaVersion: domain.SchemaVersion,
 		Date:          time.Date(2026, 5, 27, 22, 40, 0, 0, moscow),
 		Source:        domain.SourceTelegramVoice,
+		Kind:          domain.KindAtom,
 		Category:      "work/projects/tms",
 		Tags:          []string{"bug", "auth"},
 		Slug:          "tms-auth-bug",
@@ -74,4 +75,12 @@ func TestUnmarshalNote_RoundTrip(t *testing.T) {
 func TestUnmarshalNote_RejectsMissingDelimiter(t *testing.T) {
 	_, err := domain.UnmarshalNote([]byte("no frontmatter here"))
 	require.Error(t, err)
+}
+
+func TestMarshalNote_KindSummary(t *testing.T) {
+	n := sampleNote()
+	n.Kind = domain.KindSummary
+	out, err := domain.MarshalNote(n)
+	require.NoError(t, err)
+	require.Contains(t, string(out), "kind: summary")
 }

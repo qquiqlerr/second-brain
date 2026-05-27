@@ -9,6 +9,12 @@ const SchemaVersion = "1.0"
 // a category that does not pass the taxonomy whitelist.
 const CategoryUncategorized = "uncategorized"
 
+// Kind classifies notes produced by the pipeline.
+const (
+	KindAtom    = "atom"
+	KindSummary = "summary"
+)
+
 // DumpSource identifies the origin of a dump entering the pipeline.
 type DumpSource string
 
@@ -28,11 +34,12 @@ type IngestMeta struct {
 // Slug and Body are internal: Slug feeds into ID + filename, Body becomes
 // the markdown content after the YAML frontmatter.
 type Note struct {
-	ID               string     `yaml:"id"`
-	SchemaVersion    string     `yaml:"schema_version"`
-	Date             time.Time  `yaml:"date"`
-	Source           DumpSource `yaml:"source"`
-	Category         string     `yaml:"category"`
+	ID            string     `yaml:"id"`
+	SchemaVersion string     `yaml:"schema_version"`
+	Date          time.Time  `yaml:"date"`
+	Source        DumpSource `yaml:"source"`
+	Kind          string     `yaml:"kind"`
+	Category      string     `yaml:"category"`
 	OriginalCategory string     `yaml:"original_category,omitempty"`
 	Tags             []string   `yaml:"tags"`
 	Ingest           IngestMeta `yaml:"ingest"`
