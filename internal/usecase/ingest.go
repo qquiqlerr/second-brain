@@ -26,6 +26,7 @@ type IngestUseCase struct {
 	atomizeModel    string
 	transcribeModel string
 	now             func() time.Time
+	fixedDumpID     string
 }
 
 // NewIngestUseCase wires the use case with its driven ports.
@@ -84,7 +85,10 @@ func (u *IngestUseCase) Execute(ctx context.Context, req in.IngestRequest) (in.I
 		return in.IngestResult{}, domain.ErrAtomizerNoNotes
 	}
 
-	dumpID := uuid.NewString()
+	dumpID := u.fixedDumpID
+	if dumpID == "" {
+		dumpID = uuid.NewString()
+	}
 	now := u.now()
 	result := in.IngestResult{}
 
@@ -121,4 +125,14 @@ func (u *IngestUseCase) Execute(ctx context.Context, req in.IngestRequest) (in.I
 		return result, fmt.Errorf("all writes failed: %w", errors.Join(result.Errors...))
 	}
 	return result, nil
+}
+
+// WithFixedNow overrides the now() function. Test-only.
+func (u *IngestUseCase) WithFixedNow(now func() time.Time) {
+	u.now = now
+}
+
+// WithFixedDumpID forces a deterministic dump ID for golden tests.
+func (u *IngestUseCase) WithFixedDumpID(id string) {
+	u.fixedDumpID = id
 }

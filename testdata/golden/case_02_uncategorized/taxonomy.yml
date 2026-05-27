@@ -1,0 +1,9 @@
+version: "1.0"
+categories:
+  work:
+    projects:
+      - tms
+tags:
+  - auth
+  - bug
+  - idea

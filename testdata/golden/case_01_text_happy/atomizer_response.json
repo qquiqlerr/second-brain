@@ -1,0 +1,14 @@
+[
+  {
+    "title_slug": "tms-auth-bug",
+    "category": "work/projects/tms",
+    "tags": ["auth", "bug"],
+    "body": "В TMS снова упал auth, AppSheet не пропускает запрос."
+  },
+  {
+    "title_slug": "tms-auth-middleware",
+    "category": "work/projects/tms",
+    "tags": ["idea"],
+    "body": "Идея: вынести проверку токена в middleware."
+  }
+]
