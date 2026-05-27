@@ -1,0 +1,89 @@
+package usecase_test
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/aleksejmetlusko/second-brain/internal/domain"
+	"github.com/aleksejmetlusko/second-brain/internal/port/in"
+	outmocks "github.com/aleksejmetlusko/second-brain/internal/port/out/mocks"
+	"github.com/aleksejmetlusko/second-brain/internal/usecase"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+)
+
+func buildTaxonomy(t *testing.T) domain.Taxonomy {
+	t.Helper()
+	tax, err := domain.LoadTaxonomy([]byte(`
+version: "1.0"
+categories:
+  work:
+    projects:
+      - tms
+tags:
+  - bug
+  - auth
+`))
+	require.NoError(t, err)
+	return tax
+}
+
+func noteAt(category, slug string) domain.Note {
+	return domain.Note{
+		SchemaVersion: domain.SchemaVersion,
+		Date:          time.Date(2026, 5, 27, 22, 40, 0, 0, time.UTC),
+		Source:        domain.SourceTelegramText,
+		Category:      category,
+		Tags:          []string{"bug"},
+		Slug:          slug,
+		Body:          "body",
+	}
+}
+
+func TestExecute_TextDump_Happy(t *testing.T) {
+	transcriber := outmocks.NewMockTranscriber(t)
+	atomizer := outmocks.NewMockAtomizer(t)
+	store := outmocks.NewMockNoteStore(t)
+	taxLdr := outmocks.NewMockTaxonomyLoader(t)
+
+	tax := buildTaxonomy(t)
+	taxLdr.EXPECT().Load(mock.Anything).Return(tax, nil).Once()
+
+	notes := []domain.Note{
+		noteAt("work/projects/tms", "tms-bug-a"),
+		noteAt("work/projects/tms", "tms-bug-b"),
+	}
+	atomizer.EXPECT().
+		Atomize(mock.Anything, "dump", mock.Anything).
+		Return(notes, nil).
+		Once()
+
+	store.EXPECT().
+		Write(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, n domain.Note) (string, string, error) {
+			require.True(t, strings.HasPrefix(n.ID, "20260527-tms-bug"))
+			return "/notes/work/projects/tms/" + n.ID + ".md", n.ID, nil
+		}).
+		Times(2)
+
+	uc := usecase.NewIngestUseCase(transcriber, atomizer, store, taxLdr, "anthropic/claude-3.5-haiku", "openai/whisper-1")
+
+	result, err := uc.Execute(t.Context(), in.IngestRequest{
+		Source: domain.SourceTelegramText,
+		Text:   "dump",
+		UserID: 42,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Notes, 2)
+	require.Len(t, result.Paths, 2)
+	require.Zero(t, result.Uncategorized)
+	require.Empty(t, result.Errors)
+
+	// shared DumpID across all notes
+	require.Equal(t, result.Notes[0].Ingest.DumpID, result.Notes[1].Ingest.DumpID)
+	require.NotEmpty(t, result.Notes[0].Ingest.DumpID)
+	require.Equal(t, "anthropic/claude-3.5-haiku", result.Notes[0].Ingest.ModelAtomize)
+	require.Empty(t, result.Notes[0].Ingest.ModelTranscribe, "transcribe model should be empty for text")
+}
