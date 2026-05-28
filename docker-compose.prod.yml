@@ -1,0 +1,13 @@
+services:
+  ingest:
+    image: ghcr.io/qquiqlerr/second-brain:latest
+    pull_policy: always
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Europe/Moscow
+      NOTES_DIR: /data/notes
+      CONFIG_DIR: /etc/second-brain
+    volumes:
+      - ./data/notes:/data/notes
+      - ./config:/etc/second-brain
