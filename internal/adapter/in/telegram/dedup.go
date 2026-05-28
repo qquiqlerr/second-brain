@@ -17,7 +17,7 @@ type UpdateDedup struct {
 	cap     int
 	mu      sync.Mutex
 	active  map[int64]*list.Element // IDs inside the LRU window
-	evicted map[int64]struct{}       // IDs that left the window; not re-inserted
+	evicted map[int64]struct{}      // IDs that left the window; not re-inserted
 	lru     *list.List
 }
 

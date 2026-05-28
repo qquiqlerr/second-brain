@@ -79,10 +79,7 @@ func isRetryable(err error) bool {
 		return slices.Contains(retryableStatuses, httpErr.Status)
 	}
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-	return false
+	return errors.As(err, &netErr)
 }
 
 func backoffDelay(p RetryPolicy, attempt int) time.Duration {

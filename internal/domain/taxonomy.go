@@ -30,7 +30,7 @@ type rawTaxonomy struct {
 func LoadTaxonomy(data []byte) (Taxonomy, error) {
 	var raw rawTaxonomy
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return Taxonomy{}, fmt.Errorf("%w: %v", ErrTaxonomyMalformed, err)
+		return Taxonomy{}, fmt.Errorf("%w: %w", ErrTaxonomyMalformed, err)
 	}
 	if raw.Version == "" {
 		return Taxonomy{}, fmt.Errorf("%w: missing version", ErrTaxonomyMalformed)

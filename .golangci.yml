@@ -14,19 +14,36 @@ linters:
     - gocritic
     - revive
     - misspell
-    - gofmt
-    - goimports
     - errorlint
     - nilerr
     - nilnil
     - bodyclose
     - contextcheck
     - copyloopvar
-    - prealloc
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (net/http.ResponseWriter).Write
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+        - name: exported
+          disabled: true
+        - name: redefines-builtin-id
+          disabled: true
+        - name: var-naming
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - revive
 
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - revive
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -120,7 +120,7 @@ func parseAtomizerResponse(s string) (atomizerResponse, error) {
 	s = stripCodeFence(s)
 	var resp atomizerResponse
 	if err := json.Unmarshal([]byte(s), &resp); err != nil {
-		return atomizerResponse{}, fmt.Errorf("%w: %v", domain.ErrAtomizerBadResponse, err)
+		return atomizerResponse{}, fmt.Errorf("%w: %w", domain.ErrAtomizerBadResponse, err)
 	}
 	return resp, nil
 }

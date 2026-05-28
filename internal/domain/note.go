@@ -39,12 +39,12 @@ type IngestMeta struct {
 // Slug and Body are internal: Slug feeds into ID + filename, Body becomes
 // the markdown content after the YAML frontmatter.
 type Note struct {
-	ID            string     `yaml:"id"`
-	SchemaVersion string     `yaml:"schema_version"`
-	Date          time.Time  `yaml:"date"`
-	Source        DumpSource `yaml:"source"`
-	Kind          string     `yaml:"kind"`
-	Category      string     `yaml:"category"`
+	ID               string     `yaml:"id"`
+	SchemaVersion    string     `yaml:"schema_version"`
+	Date             time.Time  `yaml:"date"`
+	Source           DumpSource `yaml:"source"`
+	Kind             string     `yaml:"kind"`
+	Category         string     `yaml:"category"`
 	OriginalCategory string     `yaml:"original_category,omitempty"`
 	Tags             []string   `yaml:"tags"`
 	Ingest           IngestMeta `yaml:"ingest"`
