@@ -41,3 +41,17 @@ docker-build:
 
 run:
 	docker compose up --build
+
+.PHONY: sync-env sync-taxonomy sync-compose sync-all
+
+sync-env:
+	./scripts/sync-prod.sh --env
+
+sync-taxonomy:
+	./scripts/sync-prod.sh --taxonomy
+
+sync-compose:
+	./scripts/sync-prod.sh --compose
+
+sync-all:
+	./scripts/sync-prod.sh --all
