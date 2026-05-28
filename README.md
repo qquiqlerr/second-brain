@@ -61,6 +61,31 @@ make ci           # lint + test-int + race
 make test-prompts # ручной smoke c реальной LLM (требует OPENROUTER_API_KEY)
 ```
 
+## Deployment
+
+Production-инстанс крутится на VPS, образ собирается GitHub Actions'ом и пушится в GHCR. Полный дизайн: `docs/superpowers/specs/2026-05-28-cicd-design.md`.
+
+### Workflow
+- Push в feature-ветку или PR → CI: `lint + unit + integration + docker build` (без push в registry)
+- Merge в `main` → Deploy: те же проверки + сборка образа + push `ghcr.io/qquiqlerr/second-brain:latest` и `:sha-<7>` + SSH на VPS → `docker compose pull && up -d`
+
+### Локальный синк конфигов
+`.env` и `taxonomy.yml` живут только на dev-машине и на VPS, в git их нет. Заливка через `scripts/sync-prod.sh`:
+
+```bash
+make sync-env         # .env → recreate контейнера (~3с downtime)
+make sync-taxonomy    # taxonomy.yml → hot-reload без рестарта
+make sync-compose     # docker-compose.prod.yml → recreate контейнера
+make sync-all         # всё сразу + один docker compose pull && up -d
+```
+
+Первичное развёртывание: `./scripts/sync-prod.sh --init` (создаёт каталоги на VPS, заливает все три файла, поднимает контейнер).
+
+Скрипт подключается через SSH-алиас (по умолчанию `second-brain-vps`), который должен быть прописан в `~/.ssh/config`.
+
+### Откат
+SSH на VPS → `cd ~/second-brain` → заменить тег `:latest` на нужный `:sha-XXXXXXX` в `docker-compose.yml` → `docker compose up -d`. Все `:sha-*` теги живут в GHCR навсегда.
+
 ## Структура репозитория
 
 ```
