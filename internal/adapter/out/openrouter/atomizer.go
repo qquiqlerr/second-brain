@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/httpretry"
 	"github.com/aleksejmetlusko/second-brain/internal/domain"
 )
 
@@ -69,7 +70,7 @@ func (a *Atomizer) Atomize(ctx context.Context, dump string, tax domain.Taxonomy
 	}
 
 	var content string
-	err := WithRetry(ctx, a.client.Retry, func(ctx context.Context) error {
+	err := httpretry.With(ctx, a.client.Retry, func(ctx context.Context) error {
 		raw, err := a.postJSON(ctx, "/chat/completions", reqBody)
 		if err != nil {
 			return err
@@ -164,7 +165,7 @@ func (a *Atomizer) postJSON(ctx context.Context, path string, body any) ([]byte,
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, HTTPError{Status: resp.StatusCode, Msg: string(data)}
+		return nil, httpretry.HTTPError{Status: resp.StatusCode, Msg: string(data)}
 	}
 	return data, nil
 }

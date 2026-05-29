@@ -5,6 +5,8 @@ import (
 	"time"
 
 	openroutersdk "github.com/OpenRouterTeam/go-sdk"
+
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/httpretry"
 )
 
 // Client groups everything an OpenRouter-backed adapter needs: the official
@@ -15,7 +17,7 @@ type Client struct {
 	HTTP    *http.Client
 	APIKey  string
 	BaseURL string
-	Retry   RetryPolicy
+	Retry   httpretry.Policy
 }
 
 // ClientConfig is the constructor input for New.
@@ -25,7 +27,7 @@ type ClientConfig struct {
 	HTTPReferer string
 	XTitle      string
 	HTTPTimeout time.Duration
-	Retry       RetryPolicy
+	Retry       httpretry.Policy
 }
 
 // New constructs a Client. The same *http.Client is shared between the SDK

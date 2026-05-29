@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-telegram/bot"
 
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/httpretry"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/in/telegram"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/fs"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/openrouter"
@@ -55,7 +56,7 @@ func run() error {
 		HTTPReferer: cfg.HTTPReferer,
 		XTitle:      cfg.XTitle,
 		HTTPTimeout: cfg.HTTPTimeout,
-		Retry:       openrouter.DefaultRetryPolicy(),
+		Retry:       httpretry.Default(),
 	})
 	atomizer := openrouter.NewAtomizer(openrtrClient, cfg.AtomizeModel)
 	transcriber := openrouter.NewTranscriber(openrtrClient, cfg.TranscribeModel)
