@@ -1,6 +1,6 @@
 ---
 id: 20260527-daily-summary
-schema_version: "1.0"
+schema_version: "1.1"
 date: 2026-05-27T22:40:00+03:00
 source: telegram-text
 kind: summary

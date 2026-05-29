@@ -33,6 +33,23 @@ func MarshalNote(n Note) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// UpdateFrontmatter rewrites the YAML frontmatter of a marshalled note so
+// that:
+//   - linked_notes is set to the given slice (or removed if nil/empty)
+//   - schema_version is set to the current SchemaVersion
+//
+// Body bytes are preserved verbatim. The function is pure: it does not
+// touch the filesystem.
+func UpdateFrontmatter(data []byte, links []string) ([]byte, error) {
+	n, err := UnmarshalNote(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse frontmatter: %w", err)
+	}
+	n.SchemaVersion = SchemaVersion
+	n.LinkedNotes = links
+	return MarshalNote(n)
+}
+
 // UnmarshalNote parses a Markdown file with YAML frontmatter back into a Note.
 // Body is everything after the second --- delimiter.
 func UnmarshalNote(data []byte) (Note, error) {

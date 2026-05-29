@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aleksejmetlusko/second-brain/internal/domain"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,7 +38,7 @@ func TestMarshalNote_Layout(t *testing.T) {
 	require.True(t, strings.HasPrefix(s, "---\n"), "must start with --- delimiter")
 	require.Contains(t, s, "\n---\n")
 	require.Contains(t, s, "id: 20260527-tms-auth-bug")
-	require.Contains(t, s, "schema_version: \"1.0\"")
+	require.Contains(t, s, "schema_version: \"1.1\"")
 	require.Contains(t, s, "category: work/projects/tms")
 	require.Contains(t, s, "Текст мысли.")
 	require.True(t, strings.HasSuffix(s, "Вторая строка.\n"))
@@ -83,4 +84,52 @@ func TestMarshalNote_KindSummary(t *testing.T) {
 	out, err := domain.MarshalNote(n)
 	require.NoError(t, err)
 	require.Contains(t, string(out), "kind: summary")
+}
+
+func TestUpdateFrontmatter_RewritesLinkedNotesAndBumpsVersion(t *testing.T) {
+	src := []byte(`---
+id: 20260527-x
+schema_version: "1.0"
+date: 2026-05-27T22:40:00Z
+source: telegram-text
+kind: atom
+category: work/projects
+tags: [a]
+ingest:
+  dump_id: d
+  model_atomize: m
+---
+hello body
+`)
+	got, err := domain.UpdateFrontmatter(src, []string{"20260520-a", "20260521-b"})
+	require.NoError(t, err)
+	n, err := domain.UnmarshalNote(got)
+	require.NoError(t, err)
+	assert.Equal(t, domain.SchemaVersion, n.SchemaVersion)
+	assert.Equal(t, []string{"20260520-a", "20260521-b"}, n.LinkedNotes)
+	assert.Equal(t, "hello body\n", n.Body)
+}
+
+func TestUpdateFrontmatter_EmptyLinksClearField(t *testing.T) {
+	src := []byte(`---
+id: x
+schema_version: "1.1"
+date: 2026-05-27T22:40:00Z
+source: telegram-text
+kind: atom
+category: work
+tags: []
+linked_notes:
+  - id1
+ingest: {dump_id: d, model_atomize: m}
+---
+body
+`)
+	got, err := domain.UpdateFrontmatter(src, nil)
+	require.NoError(t, err)
+	assert.NotContains(t, string(got), "linked_notes")
+
+	got, err = domain.UpdateFrontmatter(src, []string{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(got), "linked_notes")
 }

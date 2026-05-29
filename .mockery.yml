@@ -19,3 +19,5 @@ packages:
       Atomizer:
       NoteStore:
       TaxonomyLoader:
+      Embedder:
+      VectorIndex:

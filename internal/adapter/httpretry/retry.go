@@ -1,43 +1,33 @@
-package openrouter
+package httpretry
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand/v2"
 	"net"
 	"slices"
 	"time"
 )
 
-// HTTPError is returned by callers to communicate an HTTP-shaped failure
-// without coupling them to a specific HTTP client.
-type HTTPError struct {
-	Status int
-	Msg    string
-}
-
-func (e HTTPError) Error() string { return fmt.Sprintf("http %d: %s", e.Status, e.Msg) }
-
-// RetryPolicy describes the back-off used by WithRetry.
-type RetryPolicy struct {
+// Policy describes the back-off used by With.
+type Policy struct {
 	MaxAttempts int
 	BaseDelay   time.Duration
 	MaxDelay    time.Duration
 	Jitter      float64 // 0..1, fraction of computed delay added randomly
 }
 
-// DefaultRetryPolicy mirrors the values in the design spec (§5.3).
-func DefaultRetryPolicy() RetryPolicy {
-	return RetryPolicy{MaxAttempts: 3, BaseDelay: time.Second, MaxDelay: 8 * time.Second, Jitter: 0.3}
+// Default mirrors the values in the design spec (§5.3).
+func Default() Policy {
+	return Policy{MaxAttempts: 3, BaseDelay: time.Second, MaxDelay: 8 * time.Second, Jitter: 0.3}
 }
 
 var retryableStatuses = []int{429, 500, 502, 503, 504}
 
-// WithRetry invokes op until it succeeds, the context is cancelled, or
+// With invokes op until it succeeds, the context is cancelled, or
 // MaxAttempts is exhausted. Only retryable HTTP statuses and transient
 // network errors are retried.
-func WithRetry(ctx context.Context, p RetryPolicy, op func(context.Context) error) error {
+func With(ctx context.Context, p Policy, op func(context.Context) error) error {
 	if p.MaxAttempts < 1 {
 		p.MaxAttempts = 1
 	}
@@ -61,7 +51,7 @@ func WithRetry(ctx context.Context, p RetryPolicy, op func(context.Context) erro
 		if attempt == p.MaxAttempts-1 {
 			break
 		}
-		delay := backoffDelay(p, attempt)
+		delay := backoff(p, attempt)
 		select {
 		case <-ctx.Done():
 			return errors.Join(lastErr, ctx.Err())
@@ -82,7 +72,7 @@ func isRetryable(err error) bool {
 	return errors.As(err, &netErr)
 }
 
-func backoffDelay(p RetryPolicy, attempt int) time.Duration {
+func backoff(p Policy, attempt int) time.Duration {
 	d := p.BaseDelay * (1 << attempt) //nolint:gosec // bounded by MaxAttempts
 	if p.MaxDelay > 0 && d > p.MaxDelay {
 		d = p.MaxDelay

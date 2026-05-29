@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/httpretry"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/openrouter"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ func newTranscriberFakeServer(t *testing.T, handler http.HandlerFunc) *openroute
 		APIKey:      "test",
 		BaseURL:     srv.URL,
 		HTTPTimeout: 5 * time.Second,
-		Retry:       openrouter.RetryPolicy{MaxAttempts: 2, BaseDelay: time.Millisecond},
+		Retry:       httpretry.Policy{MaxAttempts: 2, BaseDelay: time.Millisecond},
 	})
 	return openrouter.NewTranscriber(cli, "openai/whisper-1")
 }

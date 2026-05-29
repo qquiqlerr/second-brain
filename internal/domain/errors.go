@@ -9,4 +9,7 @@ var (
 	ErrTaxonomyMalformed   = errors.New("taxonomy.yml is malformed")
 	ErrAtomizerBadResponse = errors.New("atomizer returned invalid response")
 	ErrAtomizerNoNotes     = errors.New("atomizer returned zero notes")
+	ErrEmbedder            = errors.New("embedder request failed")
+	ErrVectorIndex         = errors.New("vector index operation failed")
+	ErrSearchEmpty         = errors.New("no results")
 )

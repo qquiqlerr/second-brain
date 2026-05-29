@@ -8,6 +8,8 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/httpretry"
 )
 
 // Transcriber calls OpenRouter's /audio/transcriptions endpoint. The endpoint
@@ -50,7 +52,7 @@ func (t *Transcriber) Transcribe(ctx context.Context, audio io.Reader, mimeType 
 	}
 
 	var transcript string
-	err = WithRetry(ctx, t.client.Retry, func(ctx context.Context) error {
+	err = httpretry.With(ctx, t.client.Retry, func(ctx context.Context) error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.client.BaseURL+"/audio/transcriptions", bytes.NewReader(body.Bytes()))
 		if err != nil {
 			return err
@@ -69,7 +71,7 @@ func (t *Transcriber) Transcribe(ctx context.Context, audio io.Reader, mimeType 
 			return err
 		}
 		if resp.StatusCode >= 400 {
-			return HTTPError{Status: resp.StatusCode, Msg: string(raw)}
+			return httpretry.HTTPError{Status: resp.StatusCode, Msg: string(raw)}
 		}
 		var parsed transcribeResponse
 		if err := json.Unmarshal(raw, &parsed); err != nil {

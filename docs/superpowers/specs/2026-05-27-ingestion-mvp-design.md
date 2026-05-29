@@ -838,6 +838,8 @@ MD-файлы — единственная правда. Тома `./data/notes`
 | 2 | **Semantic Index + RAG:** эмбеддинги (Voyage/local bge-small), векторная БД (SQLite+VSS), авто-перелинковка `linked_notes`, RAG-запросы через бота | (1) — устоявшийся формат MD |
 | 3 | **Telemetry Sync:** Strava + Google Fit → блок `telemetry` в YAML, ночной cron | (1) — формат YAML |
 | 4 | **Watchdog & Self-Healing:** density / clustering drift / fallback overflow / RAG degradation триггеры, reindex, LLM-миграции таксономии | (1), (2) — индекс и накопленные данные |
+| 5 | **Daily Notes:** Telegram-команда `/daily-note <текст>` для коротких мыслей в течение дня в обход atomize-пайплайна (append-only в `data/notes/daily/YYYY-MM-DD.md` строкой `- HH:MM — <текст>`), + сборка `/daily-digest` или cron (≈23:55 локального TZ) в единый файл с таймштампами, опционально через LLM-саммари. Детали — отдельный спек. | (1) |
+| 6 | **Agentic `/ask`:** LLM tool-use loop поверх `Embedder` + `VectorIndex` + `notes.Reader` из под-проекта 2. Multi-hop reasoning, follow `linked_notes`, refine queries. Спека пишется после 2–4 недель реального использования `/find`, когда накопится сигнал, какие запросы plain retrieval не закрывает. | (2) |
 
 При переходе с одной фазы на следующую:
 - `schema_version` инкрементируется (`1.0` → `1.1` для (3), `1.2` для (2))
