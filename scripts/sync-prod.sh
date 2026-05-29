@@ -97,21 +97,21 @@ uploaded_any=0
 restart_needed=0
 
 if [[ $sync_compose -eq 1 ]]; then
-  upload_atomic "$LOCAL_COMPOSE" "\$HOME/${VPS_DIR}/docker-compose.yml"
+  upload_atomic "$LOCAL_COMPOSE" "${VPS_DIR}/docker-compose.yml"
   restart_needed=1
   uploaded_any=1
   echo "✓ compose synced"
 fi
 
 if [[ $sync_env -eq 1 ]]; then
-  upload_atomic "$LOCAL_ENV" "\$HOME/${VPS_DIR}/.env"
+  upload_atomic "$LOCAL_ENV" "${VPS_DIR}/.env"
   restart_needed=1
   uploaded_any=1
   echo "✓ .env synced"
 fi
 
 if [[ $sync_taxonomy -eq 1 ]]; then
-  upload_atomic "$LOCAL_TAX" "\$HOME/${VPS_DIR}/config/taxonomy.yml"
+  upload_atomic "$LOCAL_TAX" "${VPS_DIR}/config/taxonomy.yml"
   uploaded_any=1
   echo "✓ taxonomy synced (no restart — TaxonomyLoader uses mtime cache)"
 fi
