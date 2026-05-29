@@ -3,7 +3,7 @@ package domain
 import "time"
 
 // SchemaVersion is the YAML frontmatter schema version produced by MVP.
-const SchemaVersion = "1.0"
+const SchemaVersion = "1.1"
 
 // CategoryUncategorized is the fallback category used when an LLM proposes
 // a category that does not pass the taxonomy whitelist.
@@ -47,6 +47,7 @@ type Note struct {
 	Category         string     `yaml:"category"`
 	OriginalCategory string     `yaml:"original_category,omitempty"`
 	Tags             []string   `yaml:"tags"`
+	LinkedNotes      []string   `yaml:"linked_notes,omitempty"`
 	Ingest           IngestMeta `yaml:"ingest"`
 	Slug             string     `yaml:"-"`
 	Body             string     `yaml:"-"`

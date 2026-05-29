@@ -37,7 +37,7 @@ func TestMarshalNote_Layout(t *testing.T) {
 	require.True(t, strings.HasPrefix(s, "---\n"), "must start with --- delimiter")
 	require.Contains(t, s, "\n---\n")
 	require.Contains(t, s, "id: 20260527-tms-auth-bug")
-	require.Contains(t, s, "schema_version: \"1.0\"")
+	require.Contains(t, s, "schema_version: \"1.1\"")
 	require.Contains(t, s, "category: work/projects/tms")
 	require.Contains(t, s, "Текст мысли.")
 	require.True(t, strings.HasSuffix(s, "Вторая строка.\n"))
