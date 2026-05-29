@@ -12,6 +12,7 @@ func setRequired(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "sk-or-test")
 	t.Setenv("TELEGRAM_BOT_TOKEN", "tg-test")
 	t.Setenv("ALLOWED_USER_IDS", "11,22")
+	t.Setenv("VOYAGE_API_KEY", "pa-test")
 }
 
 func TestLoad_DefaultsApplied(t *testing.T) {
@@ -46,7 +47,18 @@ func TestValidate_AcceptsKnownLogLevels(t *testing.T) {
 			OpenRouterAPIKey: "k",
 			TelegramBotToken: "t",
 			AllowedUserIDs:   []int64{1},
+			VoyageAPIKey:     "pa-test",
+			EmbeddingDim:     1024,
 		}
 		require.NoError(t, cfg.Validate())
 	}
+}
+
+func TestLoad_MissingVoyageKey_Fails(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "sk-or-test")
+	t.Setenv("TELEGRAM_BOT_TOKEN", "tg-test")
+	t.Setenv("ALLOWED_USER_IDS", "11,22")
+	t.Setenv("VOYAGE_API_KEY", "")
+	_, err := config.Load()
+	require.Error(t, err)
 }
