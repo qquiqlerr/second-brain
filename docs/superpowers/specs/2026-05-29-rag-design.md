@@ -14,7 +14,13 @@ depends-on: 2026-05-27-ingestion-mvp-design.md
 - Эмбеддинги через Voyage (`voyage-4-large` по умолчанию)
 - Векторный индекс в `sqlite-vec` (vec0 virtual table, in-process)
 - Авто-перелинковку соседей в YAML frontmatter (`linked_notes`)
-- Telegram-команды `/find` (retrieval) и `/ask` (RAG-синтез)
+- Telegram-команду `/find` (semantic retrieval)
+
+**RAG-синтез (`/ask`) и агентные сценарии — НЕ в v1.** План: накопить
+2–4 недели реального использования `/find` + ручного обхода по
+`linked_notes` в Obsidian, чтобы понять, какие запросы plain retrieval
+не вытягивает. После этого — sub-project #6 «Agentic /ask» с tool-using
+loop, построенный сразу под multi-hop reasoning.
 
 Под-проект 1 (ingestion) — единственный prerequisite. Все остальные
 под-проекты (3 telemetry, 4 watchdog) либо ортогональны, либо зависят от (2).
@@ -35,25 +41,24 @@ depends-on: 2026-05-27-ingestion-mvp-design.md
 - Порт `VectorIndex` + адаптер `sqlite-vec` (файл `data/index/index.db`)
 - Use case `Indexer`: периодический FS-scan → embed → upsert → recompute `linked_notes`
 - Schema bump: 1.0 → 1.1, добавляется `linked_notes: [id1, id2, ...]`
-- Use case `Searcher`: единый retrieval, питает `/find` и `/ask`
-- Telegram: `/find <query>` (top-N с заголовком, сниппетом, путём к файлу), `/ask <question>` (LLM-синтез с цитированием)
+- Use case `Searcher.Find`: semantic retrieval top-K
+- Telegram-команда `/find <query>` (top-N с заголовком, сниппетом, путём к файлу)
 
 ### Что вне scope (другие под-проекты или после v1)
 
+- **`/ask` RAG-синтез и любые формы LLM-генерации поверх retrieval** — переносится в sub-project #6 (agentic /ask), будет строиться сразу с tool-using loop
 - Re-ranking (cross-encoder)
 - Hybrid search (BM25 + dense)
 - Чанкование заметок на параграфы — атомы уже маленькие, эмбедим целиком
 - Backlinks внутри MD — Obsidian считает их сам, мы пишем только forward `linked_notes`
-- Multi-turn `/ask` с памятью прошлых вопросов
 - Telemetry (sub-project 3), Watchdog (sub-project 4)
 
 ### Success criteria
 
 - Бот отвечает на `/find` за < 1.5с при 5K заметок в индексе
-- `/ask` отвечает за < 8с (synthesis-LLM доминирует)
 - При деплое на чистый VPS индексатор поднимает индекс с нуля без потерь
 - При ручной правке заметки в Obsidian индекс обновляется в течение `RAG_SCAN_INTERVAL` (дефолт 5 мин)
-- Три ручных smoke-сценария зелёные: новая заметка → `linked_notes` появились; `/find` возвращает релевантное; `/ask` ссылается на реальные `id`
+- Два ручных smoke-сценария зелёные: новая заметка → `linked_notes` появились; `/find` возвращает релевантное
 
 ---
 
@@ -126,26 +131,9 @@ type SearchHit struct {
     Score float32
     Meta  IndexMeta
 }
-
-type Synthesizer interface {
-    Synthesize(ctx context.Context, question string, sources []SourceDoc) (string, error)
-}
-
-type SourceDoc struct {
-    ID       string
-    Category string
-    Date     time.Time
-    Body     string
-}
 ```
 
-`SourceDoc` отделён от `SearchHit` намеренно: hit — это «что нашёл индекс»,
-source — «что отдаём в LLM». Use case `searcher` собирает `[]SourceDoc` из
-hits, читая `Body` через существующий `notes.Reader` (из sub-project 1).
-
-Adapter возвращает «сырой» текст ответа. Парсинг цитат `[id]` живёт в use
-case `searcher` (чистая функция `parseCitations`, юнит-тестируется отдельно
-от LLM).
+Synthesizer-порт и связанные с `/ask` типы добавятся в sub-project #6.
 
 ### 2.3 Новые адаптеры (`internal/adapter/out`)
 
@@ -155,7 +143,7 @@ case `searcher` (чистая функция `parseCitations`, юнит-тест
 ### 2.4 Новые use cases (`internal/usecase`)
 
 - `indexer/indexer.go` — оркестратор: scan FS → diff с `notes_meta` → embed batch → upsert → recompute `linked_notes` → atomic rewrite YAML. Запускается в горутине из `main`.
-- `searcher/searcher.go` — `Find(query, opts) []Hit` и `Ask(question) Answer`. `Ask` использует тот же `openrouter.Client`, что и атомайзер, но с собственным промптом-адаптером `Synthesizer`.
+- `searcher/searcher.go` — `Find(ctx, query, opts) []Hit`. Только retrieval, без LLM-синтеза.
 
 ### 2.5 Структура индекса (sqlite-vec)
 
@@ -199,12 +187,11 @@ mtime меняется → индексер видит изменение → re
 internal/
   domain/
     note.go                 # дополняется LinkedNotes; SchemaVersion → "1.1"
-    errors.go               # +ErrEmbedder, +ErrVectorIndex, +ErrSynthesizer
+    errors.go               # +ErrEmbedder, +ErrVectorIndex
   port/
     out/
       embedder.go           # NEW
       vector_index.go       # NEW
-      synthesizer.go        # NEW (для /ask)
   adapter/
     httpretry/              # NEW — извлечено из openrouter/retry.go
       retry.go
@@ -221,13 +208,10 @@ internal/
         schema.go
       openrouter/
         retry.go            # удаляется (переехало в adapter/httpretry)
-        synthesizer.go      # NEW — переиспользует Client из атомайзера
-        prompt_ask.go
     in/
       telegram/
         cmd_find.go         # NEW
-        cmd_ask.go          # NEW
-        dispatcher.go       # модифицируется: роутинг /find и /ask отдельно от dump
+        dispatcher.go       # модифицируется: роутинг /find отдельно от dump
   usecase/
     indexer/
       indexer.go            # NEW
@@ -235,8 +219,7 @@ internal/
       linker.go             # NEW
       indexer_test.go
     searcher/
-      searcher.go           # NEW
-      citations.go          # NEW (parseCitations — чистая функция)
+      searcher.go           # NEW (только Find)
       searcher_test.go
 cmd/
   ingest/
@@ -349,9 +332,9 @@ C мог бы тоже захотеть переподтянуть линки. �
 ```
 1. bot validates: query non-empty, len < 500
 2. вытащить опциональные модификаторы: `#category=work/projects`, `since:2026-05-01`
-3. vec := embedder.Embed(ctx, [query], EmbedQuery)[0]
-4. hits := vec.SearchByVector(vec, SearchQuery{
-     TopK: 5,
+3. qvec := embedder.Embed(ctx, [query], EmbedQuery)[0]
+4. hits := vec.SearchByVector(qvec, SearchQuery{
+     TopK: FIND_TOP_K,
      KindFilter: []string{"atom"},
      CategoryPrefix: ...,
      DateFrom: ...,
@@ -365,43 +348,6 @@ C мог бы тоже захотеть переподтянуть линки. �
 ```
 
 Ожидаемо < 1с: HTTP к Voyage ~200мс + sqlite-vec на 5K векторов <10мс + Telegram send.
-
-### 3.5 `/ask <question>`
-
-```
-1. bot validates: 5 < len(question) < 500
-2. qvec := embedder.Embed(ctx, [question], EmbedQuery)[0]
-3. hits := vec.SearchByVector(qvec, SearchQuery{TopK: RAG_TOP_K})
-4. if len(hits) == 0:
-     reply "Ничего не нашёл по этому вопросу в твоих заметках."
-     return                                      // экономим LLM-токены
-5. sources := for each hit: notes.Reader.ReadBody(hit.Meta.FilePath) → SourceDoc{ID, Category, Date, Body}
-6. answerText := synthesizer.Synthesize(ctx, question, sources)
-   // адаптер сам форматирует промпт из sources и зовёт OpenRouter с RAG_SYNTHESIS_MODEL
-7. citedIDs := parseCitations(answerText)        // regex \[([\w-]+)\]
-8. citedHits := filter hits by id ∈ citedIDs && id exists in vec
-9. reply:
-     {answerText}
-
-     📎 Источники:
-     • [id1] {category}/{slug}  → `{relative file path}`
-     • [id2] ...
-   // только реально цитированные id, существующие в индексе
-```
-
-### 3.6 Промпт `/ask` (контракт с LLM)
-
-System prompt живёт в `prompts/ask_system.txt`, embed-ресурс адаптера:
-
-> Ты помогаешь пользователю отвечать на вопросы строго по его персональным
-> заметкам. Контекст — несколько заметок в формате `[id] (category, date)
-> body`. Ответ — по-русски, лаконично. Цитируй источники как `[id]` сразу
-> после утверждения, которое из них взято. Если в контексте нет ответа —
-> прямо скажи «В заметках нет информации по этому вопросу», не выдумывай.
-
-User message: `Контекст:\n{context}\n\nВопрос: {question}`.
-
-`temperature: 0.3`, тот же `openrouter.Client` что у атомайзера.
 
 ---
 
@@ -493,7 +439,6 @@ atomic-rewrite в `rewriteYAMLFrontmatter`.
 var (
     ErrEmbedder    = errors.New("embedder")
     ErrVectorIndex = errors.New("vector index")
-    ErrSynthesizer = errors.New("synthesizer")
     ErrSearchEmpty = errors.New("no results")
 )
 ```
@@ -512,9 +457,7 @@ Use case-слой работает только с доменными типам
 | Indexer: YAML rewrite | rename failed | log WARN; `notes_meta.linked_notes` НЕ обновляем (источник правды — диск). На следующем цикле пересчитаем |
 | `/find`: embed query | Voyage недоступен | Telegram-ответ: «Поиск временно недоступен, попробуй позже» + log ERROR |
 | `/find`: search | sqlite locked / corrupted | то же сообщение, log ERROR |
-| `/ask`: embed query | то же что `/find` | |
-| `/ask`: synthesis LLM | OpenRouter timeout / 429 | retry; итоговый отказ → ответ «Не получилось сгенерировать ответ. Вот релевантные заметки:» + список из retrieval-стадии |
-| `/ask`: пустой retrieval | < threshold или 0 hits | ответ «Ничего не нашёл по этому вопросу в твоих заметках» — НЕ зовём LLM |
+| `/find`: пустой retrieval | 0 hits | ответ «Ничего не нашёл» |
 
 ### 5.3 Retry policy
 
@@ -541,7 +484,7 @@ Retryable: 429, 5xx, `net.Error` с `Timeout()` или `Temporary()`.
 
 Все логи структурные через `log/slog`. Ключевые поля:
 
-- `op` — `indexer.run`, `indexer.embed`, `indexer.link`, `searcher.find`, `searcher.ask`
+- `op` — `indexer.run`, `indexer.embed`, `indexer.link`, `searcher.find`
 - `note_id`, `dump_id`, `query_hash` (sha1 первых 32 байт)
 - `duration_ms`, `n_embedded`, `n_linked`, `n_deleted`
 - `error` на ERROR уровнях
@@ -563,7 +506,7 @@ Indexer-горутина обёрнута в `defer recover()` с логом + �
 `main` подписан на SIGTERM/SIGINT. При shutdown:
 
 - Останавливает приём новых Telegram-команд
-- Ждёт завершения текущих `/find` и `/ask` (или ctx.timeout 10с)
+- Ждёт завершения текущих `/find` (или ctx.timeout 10с)
 - Indexer `ctx.cancel` — текущий `runOnce` доходит до ближайшей точки проверки (между batch-ами), затем выходит
 - sqlite-vec `db.Close`
 
@@ -578,7 +521,7 @@ Indexer-горутина обёрнута в `defer recover()` с логом + �
 | Domain | parse YAML 1.0/1.1, error wrapping | unit, plain `go test` |
 | Indexer | diff algorithm, корректность affected-set, retry на embedder-сбое | unit + mockery v3 для портов |
 | Linker | top-K, threshold, дедуп, исключение self | unit, fake-embedder |
-| Searcher | формат hit, fallback при пустом retrieval, citation-парсинг | unit + mockery |
+| Searcher | формат hit, фильтры по category/date, fallback при пустом retrieval | unit + mockery |
 | Adapter `sqlitevec` | upsert/search/delete на real sqlite-vec | integration (`-tags=integration`) |
 | Adapter `voyage` | сериализация запроса/ответа, classify HTTP errors | unit (`httptest.Server`) |
 | End-to-end | seed N MD-файлов → `indexer.runOnce` → `/find` → проверить порядок | integration |
@@ -608,9 +551,7 @@ usecase/searcher:
   - find_returns_top_n_sorted_by_score
   - find_with_category_prefix_filter
   - find_with_date_from_filter
-  - ask_with_empty_retrieval_skips_llm
-  - ask_extracts_citations_from_response
-  - ask_handles_hallucinated_citation_gracefully
+  - find_returns_empty_on_no_hits
 
 linker:
   - picks_top_k_above_threshold
@@ -637,8 +578,7 @@ adapter/voyage:
 
 1. Подождать `RAG_SCAN_INTERVAL` от первого старта → проверить, что у старых заметок появились `linked_notes` в YAML
 2. `/find мысли про auth` → top-5 релевантных
-3. `/ask что я думал про refresh-токены` → ответ + блок «Источники» с реальными id
-4. Удалить одну заметку через `rm` → дождаться следующего цикла → `/find` не возвращает удалённую
+3. Удалить одну заметку через `rm` → дождаться следующего цикла → `/find` не возвращает удалённую
 
 ### 6.5 CI
 
@@ -662,8 +602,7 @@ adapter/voyage:
 | `INDEXER_BATCH_SIZE` | `1000` | Размер embed-batch |
 | `LINK_TOP_K` | `5` | Сколько соседей в `linked_notes` |
 | `LINK_MIN_SIMILARITY` | `0.70` | Порог cosine similarity для линка |
-| `RAG_TOP_K` | `8` | Сколько hit-ов в контекст `/ask` |
-| `RAG_SYNTHESIS_MODEL` | `${ATOMIZE_MODEL}` | Модель для `/ask` |
+| `FIND_TOP_K` | `5` | Сколько hit-ов возвращает `/find` |
 
 Все читаются через тот же `cleanenv` config. `VOYAGE_API_KEY` —
 обязательный, fatal при отсутствии.
@@ -707,7 +646,7 @@ environment:
 
 ### 7.6 Откат
 
-Если в `/ask` или линкере найдётся регрессия:
+Если в `/find` или линкере найдётся регрессия:
 
 - `git revert` коммит → CI → автодеплой → рестарт без RAG
 - Файлы `linked_notes` в YAML останутся — это валидный optional field в schema 1.1, Obsidian их не покажет, не помешает
@@ -735,9 +674,7 @@ alpine/musl pre-built нативка vec не сработает — см. §8.1
 1. **Бандлинг `sqlite-vec`-нативки в alpine/musl.** Pre-built бинари у `asg017/sqlite-vec` — для glibc. Возможно понадобится либо переключиться на debian-slim в runtime-stage, либо собирать vec из C. Сначала пробуем как есть, фоллбек — debian-slim (+10MB).
 2. **`LINK_MIN_SIMILARITY = 0.70` — догадка.** После первого реального прогона на корпусе пользователя смотрим распределение similarities; если линки получаются пустыми или шумными — двигаем.
 3. **Re-embed при смене модели.** Используем таблицу `index_meta` с `embedding_model`, `embedding_dim`. При старте сравниваем с env: если поменялась только модель (та же размерность) — `DELETE FROM notes_vec; DELETE FROM notes_meta;` + полный backfill. Если поменялась размерность — `DROP TABLE notes_vec; CREATE VIRTUAL TABLE notes_vec USING vec0(... FLOAT[NEW_DIM])` + полный backfill. Оба случая логируются на WARN с явной причиной.
-4. **Контекст для `/ask`.** Передавать в промпт LLM только body, или body + category + date? Date особенно полезен для вопросов «что я думал на прошлой неделе про X». Дефолт — давать `[id] ({category}, YYYY-MM-DD)\n{body}`. Решим окончательно на первом прогоне через несколько разных моделей.
-5. **Slash-command vs свободный текст.** Бот сейчас принимает любой текст как dump. Парсим ли `/find` и `/ask` как command-only, или ещё и любой текст с `?` в конце? Дефолт — command-only, минимум магии.
-6. **Multi-turn `/ask`.** Каждый `/ask` независим. Память прошлых вопросов — не в MVP, оставляем на будущее.
+4. **Slash-command vs свободный текст.** Бот сейчас принимает любой текст как dump. `/find` парсим как command-only, минимум магии.
 
 ---
 
@@ -746,6 +683,7 @@ alpine/musl pre-built нативка vec не сработает — см. §8.1
 - **Под-проект 1 (ingestion)** — этот RAG требует MD-файлов с валидным YAML. Готов
 - **Под-проект 3 (telemetry)** — добавит блок `telemetry:` во frontmatter. **Ортогонально нам**: RAG не парсит этот блок, индексер просто проигнорирует поле. Никаких конфликтов
 - **Под-проект 4 (watchdog & self-healing)** — будет читать sqlite-vec индекс для трекинга density/drift. **Зависит от (2)**: эта спека закладывает таблицу `index_meta` для конфиг-versioning, чем watchdog потом воспользуется
+- **Под-проект 6 (agentic `/ask`)** — следующий шаг после (2). Использует те же `Embedder`, `VectorIndex.SearchByVector`, `notes.Reader` как **tools** в LLM tool-use loop (Anthropic tool-use API). Multi-hop reasoning, follow `linked_notes`, refine queries. Спека пишется после 2–4 недель реального использования `/find`, когда станет понятно, какие классы запросов plain retrieval не закрывает
 
 При переходе схемы:
 
@@ -778,7 +716,6 @@ alpine/musl pre-built нативка vec не сработает — см. §8.1
 ### 10.4 TDD для нового слоя
 
 - `indexer.diff` — чистая функция, юнит-тестируется первой
-- `searcher.parseCitations` — чистая функция, юнит-тесты с edge cases (нет цитат, дубли, несуществующий id)
 - Линкер top-K — юнит-тест с детерминированным fake-embedder
 - sqlite-vec адаптер — integration tests (real DB в temp dir), не mock
 
@@ -790,6 +727,5 @@ alpine/musl pre-built нативка vec не сработает — см. §8.1
 2. Adapter voyage + тесты
 3. Adapter sqlite-vec + integration тесты + Dockerfile под CGO
 4. Use case indexer (diff + linker) + тесты
-5. Use case searcher + Synthesizer-адаптер + тесты
-6. Telegram-команды `/find`, `/ask`
-7. compose.prod.yml + sync-prod.sh --init обновления
+5. Use case searcher (`Find`) + Telegram-команда `/find`
+6. compose.prod.yml + sync-prod.sh --init обновления (env + volume для index.db)
