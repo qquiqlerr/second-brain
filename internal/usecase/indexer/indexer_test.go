@@ -44,18 +44,21 @@ func TestIndexer_EmptyDB_EmbedsAllFiles(t *testing.T) {
 	vec.On("Upsert", mock.Anything, mock.MatchedBy(func(items []portout.IndexItem) bool {
 		return len(items) == 1 && items[0].ID == noteID
 	})).Return(nil).Once()
+	// After Upsert the indexer syncs YAML.linked_notes into the DB so the
+	// linker's no-op guard works on a consistent baseline. The test note
+	// has no linked_notes yet, so nil is passed.
+	vec.On("UpdateLinkedNotes", mock.Anything, noteID, []string(nil)).Return(nil).Once()
 
-	// Linker mocks. The freshly-embedded note is its own only neighbor, so
-	// affected = {noteID} and new links are empty (matches existing nil → no-op).
+	// Linker mocks. Past-only search returns empty (this is the oldest note),
+	// so linker computes no links and no rewrite is expected.
 	vec.On("GetMeta", mock.Anything, noteID).Return(portout.IndexMeta{
 		ID:       noteID,
 		FilePath: filepath.Join(notesDir, "work/projects/"+noteID+".md"),
 		Kind:     "atom",
-	}, true, nil)
-	vec.On("GetEmbedding", mock.Anything, noteID).Return([]float32{1, 0, 0}, true, nil)
-	vec.On("SearchByVector", mock.Anything, mock.Anything, mock.Anything).Return([]portout.SearchHit{
-		{ID: noteID, Meta: portout.IndexMeta{ID: noteID, Kind: "atom"}},
-	}, nil)
+		Date:     time.Now(),
+	}, true, nil).Once()
+	vec.On("GetEmbedding", mock.Anything, noteID).Return([]float32{1, 0, 0}, true, nil).Once()
+	vec.On("SearchByVector", mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Once()
 
 	rewriter := func(_ context.Context, _ string, _ []string) error { return nil }
 	ix := New(notesDir, embedder, vec, rewriter, Config{BatchSize: 10, LinkTopK: 5, LinkMinSimilarity: 0.7})
