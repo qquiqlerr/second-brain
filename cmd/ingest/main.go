@@ -25,6 +25,7 @@ import (
 	"github.com/aleksejmetlusko/second-brain/internal/domain"
 	"github.com/aleksejmetlusko/second-brain/internal/usecase"
 	"github.com/aleksejmetlusko/second-brain/internal/usecase/indexer"
+	"github.com/aleksejmetlusko/second-brain/internal/usecase/searcher"
 )
 
 func main() {
@@ -112,12 +113,25 @@ func run() error {
 		LinkMinSimilarity: cfg.LinkMinSimilarity,
 	})
 
+	search := searcher.New(embedder, vec, searcher.Config{TopK: cfg.FindTopK})
+	searchFn := func(ctx context.Context, query string) (string, error) {
+		hits, err := search.Find(ctx, query, searcher.Options{})
+		if err != nil {
+			if errors.Is(err, domain.ErrSearchEmpty) {
+				return "🔍 Пустой запрос", nil
+			}
+			slog.Error("searcher.find", "err", err)
+			return "🔍 Поиск временно недоступен", nil
+		}
+		return telegram.FormatFindReply(query, hits, cfg.NotesDir), nil
+	}
+
 	allowed := make(map[int64]struct{}, len(cfg.AllowedUserIDs))
 	for _, id := range cfg.AllowedUserIDs {
 		allowed[id] = struct{}{}
 	}
 	dedup := telegram.NewUpdateDedup(1024)
-	router := telegram.NewRouter(uc, allowed, dedup, logger)
+	router := telegram.NewRouter(uc, searchFn, allowed, dedup, logger)
 	tgHandler := telegram.NewTelegramHandler(router, cfg.TelegramBotToken)
 
 	b, err := bot.New(cfg.TelegramBotToken, bot.WithDefaultHandler(tgHandler.Handle))

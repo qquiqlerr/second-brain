@@ -42,6 +42,7 @@ type Config struct {
 	IndexerBatchSize  int           `env:"INDEXER_BATCH_SIZE"  env-default:"1000"`
 	LinkTopK          int           `env:"LINK_TOP_K"          env-default:"5"`
 	LinkMinSimilarity float32       `env:"LINK_MIN_SIMILARITY" env-default:"0.70"`
+	FindTopK          int           `env:"FIND_TOP_K"          env-default:"5"`
 }
 
 var allowedLogLevels = []string{"debug", "info", "warn", "error"}
@@ -83,6 +84,9 @@ func (c Config) Validate() error {
 	}
 	if c.LinkMinSimilarity < -1 || c.LinkMinSimilarity > 1 {
 		return fmt.Errorf("LINK_MIN_SIMILARITY must be in [-1, 1], got %v", c.LinkMinSimilarity)
+	}
+	if c.FindTopK <= 0 {
+		return fmt.Errorf("FIND_TOP_K must be positive, got %d", c.FindTopK)
 	}
 	return nil
 }

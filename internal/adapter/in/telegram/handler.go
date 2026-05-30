@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/aleksejmetlusko/second-brain/internal/domain"
 	"github.com/aleksejmetlusko/second-brain/internal/port/in"
@@ -43,6 +44,7 @@ const (
 	ActionProcessVoice
 	ActionReplyUnsupported
 	ActionReplyTooLong
+	ActionFind
 )
 
 // Decision returns Route's outcome with a pre-rendered user-visible reply
@@ -52,18 +54,23 @@ type Decision struct {
 	Reply  string
 }
 
+// SearcherFn isolates the telegram package from the searcher use case.
+// It receives a free-text query and returns the rendered reply text.
+type SearcherFn func(ctx context.Context, query string) (string, error)
+
 // Router decides what to do with each incoming update and runs the use case
 // for the messages that pass the filters.
 type Router struct {
-	uc      in.IngestDumpUseCase
-	allowed map[int64]struct{}
-	dedup   *UpdateDedup
-	logger  *slog.Logger
+	uc       in.IngestDumpUseCase
+	searcher SearcherFn
+	allowed  map[int64]struct{}
+	dedup    *UpdateDedup
+	logger   *slog.Logger
 }
 
-// NewRouter constructs a Router.
-func NewRouter(uc in.IngestDumpUseCase, allowed map[int64]struct{}, dedup *UpdateDedup, logger *slog.Logger) *Router {
-	return &Router{uc: uc, allowed: allowed, dedup: dedup, logger: logger}
+// NewRouter constructs a Router. Pass a nil searcher to disable /find.
+func NewRouter(uc in.IngestDumpUseCase, searcher SearcherFn, allowed map[int64]struct{}, dedup *UpdateDedup, logger *slog.Logger) *Router {
+	return &Router{uc: uc, searcher: searcher, allowed: allowed, dedup: dedup, logger: logger}
 }
 
 // Route classifies the update without running the use case.
@@ -75,6 +82,9 @@ func (r *Router) Route(u IncomingUpdate) Decision {
 	if r.dedup.Seen(u.UpdateID) {
 		r.logger.Info("dropping duplicate update", "update_id", u.UpdateID)
 		return Decision{Action: ActionDrop}
+	}
+	if u.Kind == UpdateText && strings.HasPrefix(strings.TrimSpace(u.Text), "/find") {
+		return Decision{Action: ActionFind}
 	}
 	switch u.Kind {
 	case UpdateText:
@@ -118,6 +128,15 @@ func (r *Router) Handle(ctx context.Context, u IncomingUpdate) (string, error) {
 			UserID:    u.FromUserID,
 		})
 		return FormatReply(res, err), nil
+	case ActionFind:
+		if r.searcher == nil {
+			return "Поиск не настроен", nil
+		}
+		query := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(u.Text), "/find"))
+		if query == "" {
+			return "Использование: /find <запрос>", nil
+		}
+		return r.searcher(ctx, query)
 	default:
 		return "", nil
 	}
