@@ -114,7 +114,7 @@ func FormatFindReply(query string, hits []portout.SearchHit, notesDir string) st
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func snippetFromFile(path string, maxLen int) string {
+func snippetFromFile(path string, maxRunes int) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
@@ -124,8 +124,11 @@ func snippetFromFile(path string, maxLen int) string {
 		return ""
 	}
 	body := strings.TrimSpace(n.Body)
-	if len(body) > maxLen {
-		body = body[:maxLen] + "..."
+	// Byte-slice (body[:N]) cuts mid-rune in Cyrillic/multibyte text and
+	// produces invalid UTF-8 — Telegram rejects the whole message.
+	runes := []rune(body)
+	if len(runes) > maxRunes {
+		body = string(runes[:maxRunes]) + "..."
 	}
 	return body
 }
