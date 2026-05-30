@@ -93,6 +93,17 @@ func (i *Indexer) RunOnce(ctx context.Context) error {
 		if err := i.vec.Upsert(ctx, items); err != nil {
 			return fmt.Errorf("upsert batch: %w", err)
 		}
+		// Sync the linked_notes column with what's currently in the YAML
+		// file. Upsert leaves the column at its default (`'[]'`), so without
+		// this sync the linker would believe stale on-disk links are gone
+		// and skip its no-op guard, then accidentally NOT rewrite the file
+		// even when the new (temporal) set is empty.
+		for _, e := range batch {
+			note := mustParseNote(paths[e.ID])
+			if err := i.vec.UpdateLinkedNotes(ctx, e.ID, note.LinkedNotes); err != nil {
+				slog.Warn("indexer: sync linked_notes from yaml", "id", e.ID, "err", err)
+			}
+		}
 	}
 
 	if len(toDelete) > 0 {
