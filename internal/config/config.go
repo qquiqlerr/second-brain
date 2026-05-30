@@ -42,7 +42,7 @@ type Config struct {
 	RAGScanInterval   time.Duration `env:"RAG_SCAN_INTERVAL"   env-default:"5m"`
 	IndexerBatchSize  int           `env:"INDEXER_BATCH_SIZE"  env-default:"1000"`
 	LinkTopK          int           `env:"LINK_TOP_K"          env-default:"5"`
-	LinkMinSimilarity float32       `env:"LINK_MIN_SIMILARITY" env-default:"0.70"`
+	LinkMinSimilarity float32       `env:"LINK_MIN_SIMILARITY" env-default:"0.40"`
 	FindTopK          int           `env:"FIND_TOP_K"          env-default:"5"`
 }
 

@@ -214,9 +214,14 @@ func (i *Index) SearchByVector(ctx context.Context, vec []float32, q portout.Sea
 			return nil, fmt.Errorf("%w: scan: %w", domain.ErrVectorIndex, err)
 		}
 		h.Meta.ID = h.ID
-		// sqlite-vec returns L2 distance for FLOAT[N]. Convert to a similarity
-		// score in [0, 1] assuming unit-norm vectors (voyage-4-large is unit-norm).
-		h.Score = float32(1 - distance/2)
+		// sqlite-vec returns L2 distance. For unit-norm vectors (OpenAI
+		// embeddings are unit-norm), cosine_similarity = 1 - distance²/2,
+		// landing in [-1, 1]. We clamp negatives to 0 for display sanity.
+		cosSim := 1 - distance*distance/2
+		if cosSim < 0 {
+			cosSim = 0
+		}
+		h.Score = float32(cosSim)
 		h.Meta.Date, _ = time.Parse(time.RFC3339, dateStr)
 		h.Meta.IndexedAt, _ = time.Parse(time.RFC3339, indexedAtStr)
 		_ = json.Unmarshal([]byte(tagsJSON), &h.Meta.Tags)
