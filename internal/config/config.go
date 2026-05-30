@@ -36,6 +36,12 @@ type Config struct {
 	EmbeddingModel string `env:"EMBEDDING_MODEL"  env-default:"voyage-4-large"`
 	EmbeddingDim   int    `env:"EMBEDDING_DIM"    env-default:"1024"`
 	VoyageBaseURL  string `env:"VOYAGE_BASE_URL"  env-default:"https://api.voyageai.com/v1"`
+
+	IndexDBPath       string        `env:"INDEX_DB_PATH"       env-default:"/data/index/index.db"`
+	RAGScanInterval   time.Duration `env:"RAG_SCAN_INTERVAL"   env-default:"5m"`
+	IndexerBatchSize  int           `env:"INDEXER_BATCH_SIZE"  env-default:"1000"`
+	LinkTopK          int           `env:"LINK_TOP_K"          env-default:"5"`
+	LinkMinSimilarity float32       `env:"LINK_MIN_SIMILARITY" env-default:"0.70"`
 }
 
 var allowedLogLevels = []string{"debug", "info", "warn", "error"}
@@ -71,6 +77,12 @@ func (c Config) Validate() error {
 	}
 	if c.EmbeddingDim <= 0 {
 		return fmt.Errorf("EMBEDDING_DIM must be positive, got %d", c.EmbeddingDim)
+	}
+	if c.LinkTopK <= 0 {
+		return fmt.Errorf("LINK_TOP_K must be positive, got %d", c.LinkTopK)
+	}
+	if c.LinkMinSimilarity < -1 || c.LinkMinSimilarity > 1 {
+		return fmt.Errorf("LINK_MIN_SIMILARITY must be in [-1, 1], got %v", c.LinkMinSimilarity)
 	}
 	return nil
 }
