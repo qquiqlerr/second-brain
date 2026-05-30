@@ -1,4 +1,4 @@
-package voyage
+package openaiembed
 
 import (
 	"bytes"
@@ -13,7 +13,10 @@ import (
 	portout "github.com/aleksejmetlusko/second-brain/internal/port/out"
 )
 
-// Embedder implements port/out.Embedder against the Voyage HTTP API.
+// Embedder implements port/out.Embedder against an OpenAI-compatible
+// /embeddings endpoint. The OpenAI shape is symmetric for documents and
+// queries — the EmbedKind argument is accepted for port-compatibility but
+// not transmitted to the server.
 type Embedder struct {
 	client *Client
 	model  string
@@ -29,9 +32,8 @@ func NewEmbedder(c *Client, model string, dim int) *Embedder {
 func (e *Embedder) Dim() int { return e.dim }
 
 type embedRequest struct {
-	Model     string   `json:"model"`
-	Input     []string `json:"input"`
-	InputType string   `json:"input_type"`
+	Model string   `json:"model"`
+	Input []string `json:"input"`
 }
 
 type embedResponse struct {
@@ -42,15 +44,15 @@ type embedResponse struct {
 	Model string `json:"model"`
 }
 
-// Embed sends texts to Voyage and returns vectors in input order.
-func (e *Embedder) Embed(ctx context.Context, texts []string, kind portout.EmbedKind) ([][]float32, error) {
+// Embed sends texts to the embeddings endpoint and returns vectors in input
+// order. The kind argument is ignored (OpenAI-style models are symmetric).
+func (e *Embedder) Embed(ctx context.Context, texts []string, _ portout.EmbedKind) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil
 	}
 	reqBody := embedRequest{
-		Model:     e.model,
-		Input:     texts,
-		InputType: string(kind),
+		Model: e.model,
+		Input: texts,
 	}
 
 	var resp embedResponse
