@@ -38,13 +38,17 @@ func (h *TelegramHandler) Handle(ctx context.Context, b *bot.Bot, update *models
 	reply, err := handler(ctx, in)
 	if err != nil {
 		logger.Error("handler error", "err", err)
-		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: "❌ внутренняя ошибка"})
+		if _, sendErr := b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: "❌ внутренняя ошибка"}); sendErr != nil {
+			logger.Error("send error reply failed", "err", sendErr)
+		}
 		return
 	}
 	if reply == "" {
 		return
 	}
-	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: reply})
+	if _, sendErr := b.SendMessage(ctx, &bot.SendMessageParams{ChatID: msg.Chat.ID, Text: reply}); sendErr != nil {
+		logger.Error("send reply failed", "err", sendErr, "reply_len", len(reply))
+	}
 }
 
 func (h *TelegramHandler) buildIncoming(update *models.Update, msg *models.Message, b *bot.Bot) IncomingUpdate {
