@@ -68,33 +68,39 @@ func (l *Linker) Recompute(ctx context.Context, seedIDs []string) error {
 		}
 	}
 
+	updated := 0
 	for id := range affected {
-		if err := l.recomputeOne(ctx, id); err != nil {
+		didUpdate, err := l.recomputeOne(ctx, id)
+		if err != nil {
 			slog.Warn("linker: recompute failed", "id", id, "err", err)
-			// continue, don't abort the whole pass
+			continue
+		}
+		if didUpdate {
+			updated++
 		}
 	}
+	slog.Info("linker.recompute", "n_seeds", len(seedIDs), "n_affected", len(affected), "n_updated", updated)
 	return nil
 }
 
-func (l *Linker) recomputeOne(ctx context.Context, id string) error {
+func (l *Linker) recomputeOne(ctx context.Context, id string) (bool, error) {
 	meta, found, err := l.vec.GetMeta(ctx, id)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !found || meta.Kind != domain.KindAtom {
-		return nil
+		return false, nil
 	}
 	vec, found, err := l.vec.GetEmbedding(ctx, id)
 	if err != nil || !found {
-		return err
+		return false, err
 	}
 	hits, err := l.vec.SearchByVector(ctx, vec, portout.SearchQuery{
 		TopK:       l.topK + 1,
 		KindFilter: []string{domain.KindAtom},
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	newLinks := make([]string, 0, l.topK)
 	for _, h := range hits {
@@ -110,10 +116,10 @@ func (l *Linker) recomputeOne(ctx context.Context, id string) error {
 		}
 	}
 	if slices.Equal(newLinks, meta.LinkedNotes) {
-		return nil
+		return false, nil
 	}
 	if err := l.vec.UpdateLinkedNotes(ctx, id, newLinks); err != nil {
-		return fmt.Errorf("update links in db: %w", err)
+		return false, fmt.Errorf("update links in db: %w", err)
 	}
 	if l.rewrite != nil {
 		if err := l.rewrite(ctx, meta.FilePath, newLinks); err != nil {
@@ -123,5 +129,5 @@ func (l *Linker) recomputeOne(ctx context.Context, id string) error {
 			slog.Warn("linker: yaml rewrite failed", "path", meta.FilePath, "err", err)
 		}
 	}
-	return nil
+	return true, nil
 }
