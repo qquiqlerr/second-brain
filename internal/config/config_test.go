@@ -51,6 +51,7 @@ func TestValidate_AcceptsKnownLogLevels(t *testing.T) {
 			EmbeddingDim:      1024,
 			LinkTopK:          5,
 			LinkMinSimilarity: 0.7,
+			FindTopK:          5,
 		}
 		require.NoError(t, cfg.Validate())
 	}

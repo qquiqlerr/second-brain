@@ -3,10 +3,13 @@ package telegram
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aleksejmetlusko/second-brain/internal/domain"
 	"github.com/aleksejmetlusko/second-brain/internal/port/in"
+	portout "github.com/aleksejmetlusko/second-brain/internal/port/out"
 )
 
 // FormatReply turns an IngestResult plus a top-level error into the Russian-
@@ -92,4 +95,45 @@ func shortError(err error) string {
 		msg = msg[:200] + "..."
 	}
 	return msg
+}
+
+// FormatFindReply renders a /find result for Telegram. Empty hits yield
+// a friendly "ничего не нашёл" line.
+func FormatFindReply(query string, hits []portout.SearchHit, notesDir string) string {
+	if len(hits) == 0 {
+		return "🔍 Ничего не нашёл по запросу: " + query
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "🔍 Топ-%d по запросу: %s\n\n", len(hits), query)
+	for i, h := range hits {
+		snippet := snippetFromFile(h.Meta.FilePath, 200)
+		relPath, _ := filepath.Rel(notesDir, h.Meta.FilePath)
+		fmt.Fprintf(&b, "%d. %s/%s (%.2f)\n%s\n`%s`\n\n",
+			i+1, h.Meta.Category, idSlug(h.ID), h.Score, snippet, relPath)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func snippetFromFile(path string, maxLen int) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	n, err := domain.UnmarshalNote(data)
+	if err != nil {
+		return ""
+	}
+	body := strings.TrimSpace(n.Body)
+	if len(body) > maxLen {
+		body = body[:maxLen] + "..."
+	}
+	return body
+}
+
+// idSlug returns the part after the YYYYMMDD- prefix in a note id.
+func idSlug(id string) string {
+	if i := strings.IndexByte(id, '-'); i >= 0 {
+		return id[i+1:]
+	}
+	return id
 }
