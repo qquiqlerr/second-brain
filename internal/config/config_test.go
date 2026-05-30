@@ -43,12 +43,14 @@ func TestValidate_RejectsBadLogLevel(t *testing.T) {
 func TestValidate_AcceptsKnownLogLevels(t *testing.T) {
 	for _, lvl := range []string{"debug", "info", "warn", "error"} {
 		cfg := config.Config{
-			LogLevel:         lvl,
-			OpenRouterAPIKey: "k",
-			TelegramBotToken: "t",
-			AllowedUserIDs:   []int64{1},
-			VoyageAPIKey:     "pa-test",
-			EmbeddingDim:     1024,
+			LogLevel:          lvl,
+			OpenRouterAPIKey:  "k",
+			TelegramBotToken:  "t",
+			AllowedUserIDs:    []int64{1},
+			VoyageAPIKey:      "pa-test",
+			EmbeddingDim:      1024,
+			LinkTopK:          5,
+			LinkMinSimilarity: 0.7,
 		}
 		require.NoError(t, cfg.Validate())
 	}

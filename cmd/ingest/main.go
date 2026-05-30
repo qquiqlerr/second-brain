@@ -19,8 +19,12 @@ import (
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/in/telegram"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/fs"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/openrouter"
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/sqlitevec"
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/voyage"
 	"github.com/aleksejmetlusko/second-brain/internal/config"
+	"github.com/aleksejmetlusko/second-brain/internal/domain"
 	"github.com/aleksejmetlusko/second-brain/internal/usecase"
+	"github.com/aleksejmetlusko/second-brain/internal/usecase/indexer"
 )
 
 func main() {
@@ -68,6 +72,46 @@ func run() error {
 		Write:      cfg.FSWriteTimeout,
 	})
 
+	voyageClient := voyage.NewClient(voyage.ClientConfig{
+		APIKey:      cfg.VoyageAPIKey,
+		BaseURL:     cfg.VoyageBaseURL,
+		HTTPTimeout: cfg.HTTPTimeout,
+		Retry:       httpretry.Default(),
+	})
+	embedder := voyage.NewEmbedder(voyageClient, cfg.EmbeddingModel, cfg.EmbeddingDim)
+
+	vec, err := sqlitevec.Open(context.Background(), sqlitevec.Config{
+		DBPath:         cfg.IndexDBPath,
+		EmbeddingDim:   cfg.EmbeddingDim,
+		EmbeddingModel: cfg.EmbeddingModel,
+	})
+	if err != nil {
+		return fmt.Errorf("open vector index: %w", err)
+	}
+	defer func() { _ = vec.Close() }()
+
+	rewriter := func(_ context.Context, path string, links []string) error {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		out, err := domain.UpdateFrontmatter(data, links)
+		if err != nil {
+			return err
+		}
+		tmp := path + ".tmp"
+		if err := os.WriteFile(tmp, out, 0o644); err != nil {
+			return err
+		}
+		return os.Rename(tmp, path)
+	}
+
+	ix := indexer.New(cfg.NotesDir, embedder, vec, rewriter, indexer.Config{
+		BatchSize:         cfg.IndexerBatchSize,
+		LinkTopK:          cfg.LinkTopK,
+		LinkMinSimilarity: cfg.LinkMinSimilarity,
+	})
+
 	allowed := make(map[int64]struct{}, len(cfg.AllowedUserIDs))
 	for _, id := range cfg.AllowedUserIDs {
 		allowed[id] = struct{}{}
@@ -84,7 +128,15 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	logger.Info("starting bot", "atomize_model", cfg.AtomizeModel, "transcribe_model", cfg.TranscribeModel, "notes_dir", cfg.NotesDir)
+	go ix.Loop(ctx, cfg.RAGScanInterval)
+
+	logger.Info("starting bot",
+		"atomize_model", cfg.AtomizeModel,
+		"transcribe_model", cfg.TranscribeModel,
+		"embedding_model", cfg.EmbeddingModel,
+		"notes_dir", cfg.NotesDir,
+		"index_db_path", cfg.IndexDBPath,
+	)
 	b.Start(ctx)
 
 	if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
