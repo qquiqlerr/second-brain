@@ -5,7 +5,13 @@ go 1.26.1
 tool github.com/vektra/mockery/v3
 
 require (
+	github.com/OpenRouterTeam/go-sdk v0.4.1
+	github.com/asg017/sqlite-vec-go-bindings v0.1.6
+	github.com/go-telegram/bot v1.21.0
+	github.com/google/uuid v1.6.0
 	github.com/gosimple/slug v1.15.0
+	github.com/ilyakaznacheev/cleanenv v1.5.0
+	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/stretchr/testify v1.11.1
 	github.com/vektra/mockery/v3 v3.7.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -13,18 +19,14 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
-	github.com/OpenRouterTeam/go-sdk v0.4.1 // indirect
 	github.com/brunoga/deep v1.3.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/go-telegram/bot v1.21.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
-	github.com/ilyakaznacheev/cleanenv v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.7.8 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
