@@ -38,7 +38,8 @@ type SearchQuery struct {
 	TopK           int
 	KindFilter     []string  // e.g. []string{"atom"}
 	CategoryPrefix string    // e.g. "work/projects"
-	DateFrom       time.Time // zero = no lower bound
+	DateFrom       time.Time // zero = no lower bound (inclusive)
+	DateBefore     time.Time // zero = no upper bound (exclusive) — used by linker for temporal "past-only" graph
 }
 
 // SearchHit is one result. Score is cosine similarity in [-1, 1].

@@ -182,6 +182,10 @@ func (i *Index) SearchByVector(ctx context.Context, vec []float32, q portout.Sea
 		whereClauses = append(whereClauses, "m.date >= ?")
 		args = append(args, q.DateFrom.UTC().Format(time.RFC3339))
 	}
+	if !q.DateBefore.IsZero() {
+		whereClauses = append(whereClauses, "m.date < ?")
+		args = append(args, q.DateBefore.UTC().Format(time.RFC3339))
+	}
 	whereSQL := ""
 	if len(whereClauses) > 0 {
 		whereSQL = " AND " + strings.Join(whereClauses, " AND ")

@@ -23,6 +23,17 @@ type Config struct {
 type YAMLRewriter func(ctx context.Context, filePath string, linkedNotes []string) error
 
 // Linker recomputes linked_notes for atoms after re-embedding.
+//
+// Temporal-only: an atom's linked_notes only references atoms with a
+// strictly earlier `date`. Rationale:
+//   - matches journaling intuition (a thought references past context)
+//   - older files stay byte-identical after new notes are added — no git
+//     churn, predictable mtime
+//   - Obsidian's backlinks panel already shows "B is referenced by A" by
+//     scanning all files, so the user still sees the reverse view without
+//     us duplicating the edge in both files
+//   - removes the need to expand the affected set to seeds + neighbors:
+//     only the seed itself can gain links, never the older neighbors
 type Linker struct {
 	vec      portout.VectorIndex
 	rewrite  YAMLRewriter
@@ -35,41 +46,13 @@ func NewLinker(vec portout.VectorIndex, rewrite YAMLRewriter, cfg Config) *Linke
 	return &Linker{vec: vec, rewrite: rewrite, topK: cfg.LinkTopK, minScore: cfg.LinkMinSimilarity}
 }
 
-// Recompute updates linked_notes for the seed IDs and their immediate
-// neighbors. Caller passes only atoms; summaries are skipped silently if
-// they sneak in.
+// Recompute updates linked_notes for the seed IDs only (no neighbor
+// expansion — temporal rule means older atoms never gain new links from
+// younger ones). Caller passes only atoms; summaries are skipped silently
+// if they sneak in.
 func (l *Linker) Recompute(ctx context.Context, seedIDs []string) error {
-	affected := make(map[string]struct{}, len(seedIDs)*2)
-	for _, id := range seedIDs {
-		meta, found, err := l.vec.GetMeta(ctx, id)
-		if err != nil {
-			return err
-		}
-		if !found || meta.Kind != domain.KindAtom {
-			continue
-		}
-		affected[id] = struct{}{}
-
-		vec, _, err := l.vec.GetEmbedding(ctx, id)
-		if err != nil {
-			return err
-		}
-		neighbors, err := l.vec.SearchByVector(ctx, vec, portout.SearchQuery{
-			TopK:       l.topK + 1,
-			KindFilter: []string{domain.KindAtom},
-		})
-		if err != nil {
-			return err
-		}
-		for _, n := range neighbors {
-			if n.ID != id {
-				affected[n.ID] = struct{}{}
-			}
-		}
-	}
-
 	updated := 0
-	for id := range affected {
+	for _, id := range seedIDs {
 		didUpdate, err := l.recomputeOne(ctx, id)
 		if err != nil {
 			slog.Warn("linker: recompute failed", "id", id, "err", err)
@@ -79,7 +62,7 @@ func (l *Linker) Recompute(ctx context.Context, seedIDs []string) error {
 			updated++
 		}
 	}
-	slog.Info("linker.recompute", "n_seeds", len(seedIDs), "n_affected", len(affected), "n_updated", updated)
+	slog.Info("linker.recompute", "n_seeds", len(seedIDs), "n_updated", updated)
 	return nil
 }
 
@@ -95,9 +78,14 @@ func (l *Linker) recomputeOne(ctx context.Context, id string) (bool, error) {
 	if err != nil || !found {
 		return false, err
 	}
+	// DateBefore = meta.Date: strict "<" filter in sqlite-vec excludes
+	// self (same timestamp) and any atom written at the same instant. If
+	// two atoms share an identical timestamp (rare, only on backfill of
+	// hand-crafted notes) neither links to the other — acceptable.
 	hits, err := l.vec.SearchByVector(ctx, vec, portout.SearchQuery{
 		TopK:       l.topK + 1,
 		KindFilter: []string{domain.KindAtom},
+		DateBefore: meta.Date,
 	})
 	if err != nil {
 		return false, err
@@ -105,7 +93,7 @@ func (l *Linker) recomputeOne(ctx context.Context, id string) (bool, error) {
 	newLinks := make([]string, 0, l.topK)
 	for _, h := range hits {
 		if h.ID == id {
-			continue
+			continue // belt-and-suspenders; DateBefore already excludes
 		}
 		if h.Score < l.minScore {
 			break // hits are sorted desc
