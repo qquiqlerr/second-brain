@@ -115,14 +115,28 @@ func run() error {
 
 	search := searcher.New(embedder, vec, searcher.Config{TopK: cfg.FindTopK})
 	searchFn := func(ctx context.Context, query string) (string, error) {
+		start := time.Now()
 		hits, err := search.Find(ctx, query, searcher.Options{})
 		if err != nil {
 			if errors.Is(err, domain.ErrSearchEmpty) {
 				return "🔍 Пустой запрос", nil
 			}
-			slog.Error("searcher.find", "err", err)
+			slog.Error("searcher.find", "query", query, "err", err)
 			return "🔍 Поиск временно недоступен", nil
 		}
+		topScore := float32(0)
+		topID := ""
+		if len(hits) > 0 {
+			topScore = hits[0].Score
+			topID = hits[0].ID
+		}
+		slog.Info("searcher.find",
+			"query", query,
+			"n_hits", len(hits),
+			"top_id", topID,
+			"top_score", topScore,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
 		return telegram.FormatFindReply(query, hits, cfg.NotesDir), nil
 	}
 
