@@ -18,9 +18,9 @@ import (
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/httpretry"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/in/telegram"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/fs"
+	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/openaiembed"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/openrouter"
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/sqlitevec"
-	"github.com/aleksejmetlusko/second-brain/internal/adapter/out/voyage"
 	"github.com/aleksejmetlusko/second-brain/internal/config"
 	"github.com/aleksejmetlusko/second-brain/internal/domain"
 	"github.com/aleksejmetlusko/second-brain/internal/usecase"
@@ -73,13 +73,13 @@ func run() error {
 		Write:      cfg.FSWriteTimeout,
 	})
 
-	voyageClient := voyage.NewClient(voyage.ClientConfig{
-		APIKey:      cfg.VoyageAPIKey,
-		BaseURL:     cfg.VoyageBaseURL,
+	embedClient := openaiembed.NewClient(openaiembed.ClientConfig{
+		APIKey:      cfg.OpenRouterAPIKey,
+		BaseURL:     cfg.OpenRouterBaseURL,
 		HTTPTimeout: cfg.HTTPTimeout,
 		Retry:       httpretry.Default(),
 	})
-	embedder := voyage.NewEmbedder(voyageClient, cfg.EmbeddingModel, cfg.EmbeddingDim)
+	embedder := openaiembed.NewEmbedder(embedClient, cfg.EmbeddingModel, cfg.EmbeddingDim)
 
 	vec, err := sqlitevec.Open(context.Background(), sqlitevec.Config{
 		DBPath:         cfg.IndexDBPath,

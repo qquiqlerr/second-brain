@@ -83,7 +83,7 @@ if [[ $do_init -eq 1 ]]; then
     read -r -p "~/${VPS_DIR} already exists on $VPS. Continue and overwrite configs? [y/N] " ans
     [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
   fi
-  ssh "$VPS" "mkdir -p \"\$HOME/${VPS_DIR}/config\" \"\$HOME/${VPS_DIR}/data/notes\""
+  ssh "$VPS" "mkdir -p \"\$HOME/${VPS_DIR}/config\" \"\$HOME/${VPS_DIR}/data/notes\" \"\$HOME/${VPS_DIR}/data/index\""
 fi
 
 upload_atomic() {

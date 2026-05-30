@@ -1,5 +1,7 @@
-// Package voyage implements the Embedder driven port using voyageai.com.
-package voyage
+// Package openaiembed implements port/out.Embedder against any OpenAI-compatible
+// /embeddings endpoint (OpenAI itself, OpenRouter, or any other vendor that
+// mirrors the OpenAI shape).
+package openaiembed
 
 import (
 	"net/http"
@@ -8,11 +10,11 @@ import (
 	"github.com/aleksejmetlusko/second-brain/internal/adapter/httpretry"
 )
 
-// Client groups HTTP + auth + retry policy for Voyage endpoints.
+// Client groups HTTP + auth + retry policy for an OpenAI-compatible endpoint.
 type Client struct {
 	HTTP    *http.Client
 	APIKey  string
-	BaseURL string
+	BaseURL string // e.g. https://openrouter.ai/api/v1
 	Retry   httpretry.Policy
 }
 
@@ -24,7 +26,7 @@ type ClientConfig struct {
 	Retry       httpretry.Policy
 }
 
-// NewClient builds a Client. BaseURL omits trailing slash.
+// NewClient builds a Client. BaseURL must omit trailing slash.
 func NewClient(cfg ClientConfig) *Client {
 	return &Client{
 		HTTP:    &http.Client{Timeout: cfg.HTTPTimeout},

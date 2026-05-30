@@ -12,7 +12,6 @@ func setRequired(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "sk-or-test")
 	t.Setenv("TELEGRAM_BOT_TOKEN", "tg-test")
 	t.Setenv("ALLOWED_USER_IDS", "11,22")
-	t.Setenv("VOYAGE_API_KEY", "pa-test")
 }
 
 func TestLoad_DefaultsApplied(t *testing.T) {
@@ -47,8 +46,7 @@ func TestValidate_AcceptsKnownLogLevels(t *testing.T) {
 			OpenRouterAPIKey:  "k",
 			TelegramBotToken:  "t",
 			AllowedUserIDs:    []int64{1},
-			VoyageAPIKey:      "pa-test",
-			EmbeddingDim:      1024,
+			EmbeddingDim:      1536,
 			LinkTopK:          5,
 			LinkMinSimilarity: 0.7,
 			FindTopK:          5,
@@ -57,11 +55,10 @@ func TestValidate_AcceptsKnownLogLevels(t *testing.T) {
 	}
 }
 
-func TestLoad_MissingVoyageKey_Fails(t *testing.T) {
-	t.Setenv("OPENROUTER_API_KEY", "sk-or-test")
-	t.Setenv("TELEGRAM_BOT_TOKEN", "tg-test")
-	t.Setenv("ALLOWED_USER_IDS", "11,22")
-	t.Setenv("VOYAGE_API_KEY", "")
-	_, err := config.Load()
-	require.Error(t, err)
+func TestLoad_EmbeddingDefaults(t *testing.T) {
+	setRequired(t)
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	require.Equal(t, "openai/text-embedding-3-small", cfg.EmbeddingModel)
+	require.Equal(t, 1536, cfg.EmbeddingDim)
 }

@@ -9,6 +9,8 @@ services:
       TZ: Europe/Moscow
       NOTES_DIR: /data/notes
       CONFIG_DIR: /etc/second-brain
+      INDEX_DB_PATH: /data/index/index.db
     volumes:
       - ./data/notes:/data/notes
+      - ./data/index:/data/index
       - ./config:/etc/second-brain

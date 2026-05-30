@@ -1,4 +1,4 @@
-package voyage
+package openaiembed
 
 import (
 	"encoding/json"
@@ -19,22 +19,20 @@ func TestEmbedder_HappyPath_ReturnsVectors(t *testing.T) {
 		assert.Equal(t, "/embeddings", r.URL.Path)
 		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
 
-		var req struct {
-			Model     string   `json:"model"`
-			Input     []string `json:"input"`
-			InputType string   `json:"input_type"`
-		}
+		var req map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-		assert.Equal(t, "voyage-4-large", req.Model)
-		assert.Equal(t, "document", req.InputType)
-		assert.Equal(t, []string{"hello", "world"}, req.Input)
+		assert.Equal(t, "openai/text-embedding-3-small", req["model"])
+		assert.Equal(t, []any{"hello", "world"}, req["input"])
+		// OpenAI shape: no input_type field.
+		_, hasInputType := req["input_type"]
+		assert.False(t, hasInputType, "input_type must not be sent in OpenAI shape")
 
 		resp := map[string]any{
 			"data": []map[string]any{
 				{"embedding": []float32{0.1, 0.2, 0.3}, "index": 0},
 				{"embedding": []float32{0.4, 0.5, 0.6}, "index": 1},
 			},
-			"model": "voyage-4-large",
+			"model": "openai/text-embedding-3-small",
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -46,7 +44,7 @@ func TestEmbedder_HappyPath_ReturnsVectors(t *testing.T) {
 		HTTPTimeout: 5 * time.Second,
 		Retry:       httpretry.Default(),
 	})
-	e := NewEmbedder(c, "voyage-4-large", 3)
+	e := NewEmbedder(c, "openai/text-embedding-3-small", 3)
 
 	vecs, err := e.Embed(t.Context(), []string{"hello", "world"}, portout.EmbedDocument)
 	require.NoError(t, err)
@@ -57,7 +55,7 @@ func TestEmbedder_HappyPath_ReturnsVectors(t *testing.T) {
 
 func TestEmbedder_Returns429AsRetryable(t *testing.T) {
 	var calls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
 		if calls < 3 {
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -96,6 +94,6 @@ func TestEmbedder_400IsTerminal(t *testing.T) {
 }
 
 func TestEmbedder_DimReturnsConfigured(t *testing.T) {
-	e := NewEmbedder(nil, "m", 1024)
-	assert.Equal(t, 1024, e.Dim())
+	e := NewEmbedder(nil, "m", 1536)
+	assert.Equal(t, 1536, e.Dim())
 }

@@ -32,10 +32,11 @@ type Config struct {
 	TZ       string `env:"TZ"        env-default:"Europe/Moscow"`
 	LogLevel string `env:"LOG_LEVEL" env-default:"info" env-description:"debug | info | warn | error"`
 
-	VoyageAPIKey   string `env:"VOYAGE_API_KEY"   env-required:"true" env-description:"Voyage AI API key for embeddings"`
-	EmbeddingModel string `env:"EMBEDDING_MODEL"  env-default:"voyage-4-large"`
-	EmbeddingDim   int    `env:"EMBEDDING_DIM"    env-default:"1024"`
-	VoyageBaseURL  string `env:"VOYAGE_BASE_URL"  env-default:"https://api.voyageai.com/v1"`
+	// Embeddings go through the same OpenRouter base URL + API key as the
+	// atomizer (OPENROUTER_*). Direct providers (OpenAI, Voyage, etc.) are
+	// often geo-blocked from RU IPs; OpenRouter proxies them.
+	EmbeddingModel string `env:"EMBEDDING_MODEL" env-default:"openai/text-embedding-3-small"`
+	EmbeddingDim   int    `env:"EMBEDDING_DIM"   env-default:"1536"`
 
 	IndexDBPath       string        `env:"INDEX_DB_PATH"       env-default:"/data/index/index.db"`
 	RAGScanInterval   time.Duration `env:"RAG_SCAN_INTERVAL"   env-default:"5m"`
@@ -72,9 +73,6 @@ func (c Config) Validate() error {
 	}
 	if len(c.AllowedUserIDs) == 0 {
 		return fmt.Errorf("ALLOWED_USER_IDS must contain at least one user")
-	}
-	if c.VoyageAPIKey == "" {
-		return fmt.Errorf("VOYAGE_API_KEY is required but empty")
 	}
 	if c.EmbeddingDim <= 0 {
 		return fmt.Errorf("EMBEDDING_DIM must be positive, got %d", c.EmbeddingDim)
