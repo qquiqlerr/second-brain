@@ -1,6 +1,6 @@
 # Caddyfile — serves the Quartz-built static site behind basic auth.
-# Self-signed TLS via `tls internal` (no domain → no Let's Encrypt).
-# Browsers will warn the first time; accept the cert once per device.
+# Self-signed TLS via Caddy's local CA (no domain → no Let's Encrypt).
+# Browsers will warn about the cert the first time; accept once per device.
 #
 # Basic-auth user "admin" with bcrypt hash from QUARTZ_BASIC_AUTH_HASH env.
 # Generate the hash via:
@@ -9,14 +9,17 @@
 {
 	auto_https disable_redirects
 	admin off
+	# TLS clients connecting to a bare IP do NOT send SNI (RFC 6066
+	# forbids it). Without a default, Caddy can't pick a site to terminate
+	# the handshake → tls alert internal_error. Pin the IP as the default.
+	default_sni 89.169.184.228
 }
 
-# HTTPS listener with self-signed cert (Caddy generates a local CA on first run).
-# Listen on 443 inside the container; host exposes 8443 via compose ports map.
-:443 {
+# Bare IP, no DNS — Caddy mints a self-signed cert via its local CA.
+# The IP is listed explicitly so it ends up in the cert's SAN.
+89.169.184.228:443 {
 	tls internal
-
-	basicauth * {
+	basic_auth * {
 		admin {env.QUARTZ_BASIC_AUTH_HASH}
 	}
 
