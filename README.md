@@ -86,6 +86,36 @@ make sync-all         # всё сразу + один docker compose pull && up -
 ### Откат
 SSH на VPS → `cd ~/second-brain` → заменить тег `:latest` на нужный `:sha-XXXXXXX` в `docker-compose.yml` → `docker compose up -d`. Все `:sha-*` теги живут в GHCR навсегда.
 
+### Quartz (web-витрина заметок)
+
+`docker-compose.prod.yml` поднимает два дополнительных сервиса: `quartz`
+пересобирает статический сайт из `data/notes/` каждые `QUARTZ_BUILD_INTERVAL_SEC`
+секунд (дефолт 300), `caddy` раздаёт результат на `:443` с self-signed TLS
+и basic-auth.
+
+Setup:
+
+1. Сгенерировать bcrypt-хеш пароля локально:
+   ```bash
+   docker run --rm caddy:2-alpine caddy hash-password --plaintext 'YOUR_PASSWORD'
+   ```
+2. Положить результат в `.env`:
+   ```
+   QUARTZ_BASIC_AUTH_HASH=$2a$14$...
+   ```
+3. Залить всё на VPS:
+   ```bash
+   ./scripts/sync-prod.sh --quartz --compose --env
+   ```
+4. Открыть `https://<vps-ip>:8443/` — порт 8443 потому что host'овый
+   80/443 могут быть заняты другими сервисами. Браузер ругнётся на
+   self-signed CA (Caddy подписывает своим), принять предупреждение один
+   раз. Логин `admin`, пароль из шага 1.
+
+Quartz logs: `docker logs second-brain-quartz-1`. Каждый build печатает
+строку с временем — если индексер недавно правил `linked_notes`-секции
+тел заметок, следующий quartz build подхватит их и нарисует рёбра графа.
+
 ## Структура репозитория
 
 ```

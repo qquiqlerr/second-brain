@@ -11,22 +11,26 @@ VPS_DIR="${VPS_DIR:-second-brain}"
 LOCAL_ENV="${REPO_ROOT}/.env"
 LOCAL_TAX="${REPO_ROOT}/config/taxonomy.yml"
 LOCAL_COMPOSE="${REPO_ROOT}/docker-compose.prod.yml"
+LOCAL_CADDYFILE="${REPO_ROOT}/Caddyfile"
+LOCAL_QUARTZ_DIR="${REPO_ROOT}/quartz"
 
 sync_env=0
 sync_taxonomy=0
 sync_compose=0
+sync_quartz=0
 do_init=0
 force=0
 
 usage() {
   cat <<EOF
-Usage: $0 [--env] [--taxonomy] [--compose] [--all] [--init] [--force]
+Usage: $0 [--env] [--taxonomy] [--compose] [--quartz] [--all] [--init] [--force]
 
   --env        upload .env to ~/${VPS_DIR}/.env and recreate container
   --taxonomy   upload config/taxonomy.yml; no restart (TaxonomyLoader picks up via mtime)
   --compose    upload docker-compose.prod.yml to ~/${VPS_DIR}/docker-compose.yml
-  --all        all three plus a single docker compose pull && up -d
-  --init       first-time bootstrap: mkdir + scp all three + up -d
+  --quartz     upload quartz/ Dockerfile + scripts + Caddyfile (triggers compose build)
+  --all        env + taxonomy + compose + quartz, then pull && up -d --build
+  --init       first-time bootstrap: mkdir + scp everything + up -d --build
   --force      with --init, skip confirmation if ~/${VPS_DIR} already exists
 
 Environment:
@@ -43,8 +47,9 @@ while [[ $# -gt 0 ]]; do
     --env) sync_env=1 ;;
     --taxonomy) sync_taxonomy=1 ;;
     --compose) sync_compose=1 ;;
-    --all) sync_env=1; sync_taxonomy=1; sync_compose=1 ;;
-    --init) do_init=1; sync_env=1; sync_taxonomy=1; sync_compose=1 ;;
+    --quartz) sync_quartz=1 ;;
+    --all) sync_env=1; sync_taxonomy=1; sync_compose=1; sync_quartz=1 ;;
+    --init) do_init=1; sync_env=1; sync_taxonomy=1; sync_compose=1; sync_quartz=1 ;;
     --force) force=1 ;;
     -h|--help) usage ;;
     *) echo "Unknown flag: $1" >&2; usage ;;
@@ -63,6 +68,16 @@ fi
 if [[ ($sync_compose -eq 1 || $do_init -eq 1) && ! -f "$LOCAL_COMPOSE" ]]; then
   echo "ERROR: $LOCAL_COMPOSE not found" >&2
   exit 1
+fi
+if [[ $sync_quartz -eq 1 ]]; then
+  if [[ ! -d "$LOCAL_QUARTZ_DIR" ]]; then
+    echo "ERROR: $LOCAL_QUARTZ_DIR not found" >&2
+    exit 1
+  fi
+  if [[ ! -f "$LOCAL_CADDYFILE" ]]; then
+    echo "ERROR: $LOCAL_CADDYFILE not found" >&2
+    exit 1
+  fi
 fi
 
 if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$VPS" 'true' 2>/dev/null; then
@@ -83,7 +98,13 @@ if [[ $do_init -eq 1 ]]; then
     read -r -p "~/${VPS_DIR} already exists on $VPS. Continue and overwrite configs? [y/N] " ans
     [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
   fi
-  ssh "$VPS" "mkdir -p \"\$HOME/${VPS_DIR}/config\" \"\$HOME/${VPS_DIR}/data/notes\" \"\$HOME/${VPS_DIR}/data/index\""
+  ssh "$VPS" "mkdir -p \
+    \"\$HOME/${VPS_DIR}/config\" \
+    \"\$HOME/${VPS_DIR}/data/notes\" \
+    \"\$HOME/${VPS_DIR}/data/index\" \
+    \"\$HOME/${VPS_DIR}/data/quartz-public\" \
+    \"\$HOME/${VPS_DIR}/data/caddy\" \
+    \"\$HOME/${VPS_DIR}/data/caddy-config\""
 fi
 
 upload_atomic() {
@@ -116,6 +137,15 @@ if [[ $sync_taxonomy -eq 1 ]]; then
   echo "✓ taxonomy synced (no restart — TaxonomyLoader uses mtime cache)"
 fi
 
+if [[ $sync_quartz -eq 1 ]]; then
+  ssh "$VPS" "mkdir -p \"\$HOME/${VPS_DIR}/quartz\""
+  # rsync would be cleaner but is not assumed-present on every VPS; tar over ssh works.
+  tar -C "$REPO_ROOT" -czf - quartz Caddyfile | ssh "$VPS" "tar -C \"\$HOME/${VPS_DIR}\" -xzf -"
+  restart_needed=1
+  uploaded_any=1
+  echo "✓ quartz/ + Caddyfile synced"
+fi
+
 if [[ $uploaded_any -eq 0 ]]; then
   echo "Nothing to do."
   exit 0
@@ -126,7 +156,10 @@ if [[ $restart_needed -eq 1 || $do_init -eq 1 ]]; then
     echo "ERROR: compose on remote is invalid — aborting restart" >&2
     exit 1
   fi
-  echo "→ pulling and recreating container..."
-  ssh "$VPS" "cd \"\$HOME/${VPS_DIR}\" && docker compose pull && docker compose up -d"
-  echo "✓ container restarted"
+  echo "→ pulling, building, recreating containers..."
+  # `pull` updates pinned :latest images (ingest, caddy); `up -d --build`
+  # rebuilds the local quartz image when its Dockerfile changes (no-op
+  # otherwise).
+  ssh "$VPS" "cd \"\$HOME/${VPS_DIR}\" && docker compose pull && docker compose up -d --build"
+  echo "✓ containers restarted"
 fi

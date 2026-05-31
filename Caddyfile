@@ -1,0 +1,28 @@
+# Caddyfile — serves the Quartz-built static site behind basic auth.
+# Self-signed TLS via `tls internal` (no domain → no Let's Encrypt).
+# Browsers will warn the first time; accept the cert once per device.
+#
+# Basic-auth user "admin" with bcrypt hash from QUARTZ_BASIC_AUTH_HASH env.
+# Generate the hash via:
+#   docker run --rm caddy:2-alpine caddy hash-password --plaintext 'YOUR_PASS'
+
+{
+	auto_https disable_redirects
+	admin off
+}
+
+# HTTPS listener with self-signed cert (Caddy generates a local CA on first run).
+# Listen on 443 inside the container; host exposes 8443 via compose ports map.
+:443 {
+	tls internal
+
+	basicauth * {
+		admin {env.QUARTZ_BASIC_AUTH_HASH}
+	}
+
+	# Quartz writes to /srv/site (subdir of the shared volume so it can
+	# safely rmdir its own working area).
+	root * /srv/site
+	encode gzip zstd
+	file_server
+}
