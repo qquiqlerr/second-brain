@@ -27,5 +27,14 @@
 	# safely rmdir its own working area).
 	root * /srv/site
 	encode gzip zstd
-	file_server
+	# Quartz emits "pretty URLs" — /personal/foo links to a file at
+	# /personal/foo.html. Try the extension before giving up.
+	try_files {path} {path}.html {path}/index.html
+	file_server {
+		index index.html
+	}
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
 }
