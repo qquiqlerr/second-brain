@@ -86,7 +86,7 @@ func TestMarshalNote_KindSummary(t *testing.T) {
 	require.Contains(t, string(out), "kind: summary")
 }
 
-func TestUpdateFrontmatter_RewritesLinkedNotesAndBumpsVersion(t *testing.T) {
+func TestUpdateFrontmatter_RewritesLinkedNotesAndAddsBodySection(t *testing.T) {
 	src := []byte(`---
 id: 20260527-x
 schema_version: "1.0"
@@ -107,7 +107,20 @@ hello body
 	require.NoError(t, err)
 	assert.Equal(t, domain.SchemaVersion, n.SchemaVersion)
 	assert.Equal(t, []string{"20260520-a", "20260521-b"}, n.LinkedNotes)
-	assert.Equal(t, "hello body\n", n.Body)
+
+	// Body must contain the original text AND the auto-generated wikilink section.
+	assert.Contains(t, n.Body, "hello body")
+	assert.Contains(t, n.Body, "<!-- linked_notes_start -->")
+	assert.Contains(t, n.Body, "## Связано")
+	assert.Contains(t, n.Body, "[[20260520-a]]")
+	assert.Contains(t, n.Body, "[[20260521-b]]")
+	assert.Contains(t, n.Body, "<!-- linked_notes_end -->")
+
+	// CanonicalBody strips the section so embedder/hasher see only original.
+	canonical := domain.CanonicalBody(n.Body)
+	assert.Contains(t, canonical, "hello body")
+	assert.NotContains(t, canonical, "linked_notes_start")
+	assert.NotContains(t, canonical, "[[20260520-a]]")
 }
 
 func TestUpdateFrontmatter_EmptyLinksClearField(t *testing.T) {
@@ -132,4 +145,71 @@ body
 	got, err = domain.UpdateFrontmatter(src, []string{})
 	require.NoError(t, err)
 	assert.NotContains(t, string(got), "linked_notes")
+}
+
+func TestUpdateFrontmatter_ReplacesExistingSection(t *testing.T) {
+	src := []byte(`---
+id: x
+schema_version: "1.1"
+date: 2026-05-27T22:40:00Z
+source: telegram-text
+kind: atom
+category: work
+tags: []
+ingest: {dump_id: d, model_atomize: m}
+---
+original body text
+
+<!-- linked_notes_start -->
+## Связано
+- [[old-id-1]]
+- [[old-id-2]]
+<!-- linked_notes_end -->
+`)
+	got, err := domain.UpdateFrontmatter(src, []string{"new-id"})
+	require.NoError(t, err)
+	n, err := domain.UnmarshalNote(got)
+	require.NoError(t, err)
+
+	assert.Contains(t, n.Body, "original body text")
+	assert.Contains(t, n.Body, "[[new-id]]")
+	assert.NotContains(t, n.Body, "[[old-id-1]]")
+	assert.NotContains(t, n.Body, "[[old-id-2]]")
+	// Exactly one start marker — section not duplicated.
+	assert.Equal(t, 1, strings.Count(n.Body, "<!-- linked_notes_start -->"))
+}
+
+func TestUpdateFrontmatter_RemovesSectionWhenLinksEmpty(t *testing.T) {
+	src := []byte(`---
+id: x
+schema_version: "1.1"
+date: 2026-05-27T22:40:00Z
+source: telegram-text
+kind: atom
+category: work
+tags: []
+ingest: {dump_id: d, model_atomize: m}
+---
+original body text
+
+<!-- linked_notes_start -->
+## Связано
+- [[some-id]]
+<!-- linked_notes_end -->
+`)
+	got, err := domain.UpdateFrontmatter(src, nil)
+	require.NoError(t, err)
+	n, err := domain.UnmarshalNote(got)
+	require.NoError(t, err)
+	assert.Contains(t, n.Body, "original body text")
+	assert.NotContains(t, n.Body, "linked_notes_start")
+	assert.NotContains(t, n.Body, "[[some-id]]")
+}
+
+func TestCanonicalBody_IsIdempotent(t *testing.T) {
+	body := "some text\n\n<!-- linked_notes_start -->\n## Связано\n- [[x]]\n<!-- linked_notes_end -->\n"
+	once := domain.CanonicalBody(body)
+	twice := domain.CanonicalBody(once)
+	assert.Equal(t, once, twice)
+	assert.NotContains(t, once, "linked_notes_start")
 }
