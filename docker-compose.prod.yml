@@ -14,3 +14,27 @@ services:
       - ./data/notes:/data/notes
       - ./data/index:/data/index
       - ./config:/etc/second-brain
+
+  quartz:
+    build:
+      context: ./quartz
+    restart: unless-stopped
+    environment:
+      QUARTZ_BUILD_INTERVAL_SEC: "300"
+    volumes:
+      - ./data/notes:/content:ro
+      - ./data/quartz-public:/output
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      # Non-standard port: host already runs nginx on :80/:443 for unrelated
+      # projects. Hit https://<vps-ip>:8443/.
+      - "8443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/quartz-public:/srv:ro
+      - ./data/caddy:/data
+      - ./data/caddy-config:/config
