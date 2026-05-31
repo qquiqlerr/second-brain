@@ -68,7 +68,7 @@ func (i *Indexer) RunOnce(ctx context.Context) error {
 		batch := toEmbed[batchStart:end]
 		texts := make([]string, len(batch))
 		for k, e := range batch {
-			texts[k] = bodies[e.ID]
+			texts[k] = domain.CanonicalBody(bodies[e.ID])
 		}
 		vectors, err := i.embedder.Embed(ctx, texts, portout.EmbedDocument)
 		if err != nil {
@@ -177,7 +177,11 @@ func (i *Indexer) scan(ctx context.Context) ([]FSEntry, map[string]string, map[s
 			slog.Warn("indexer.parse", "path", path, "err", err)
 			return nil
 		}
-		h := sha256.Sum256([]byte(n.Body))
+		// Hash the canonical body (without the auto-generated linked_notes
+		// section) so a linker-driven rewrite of that section doesn't make
+		// the next scan think the note's content changed.
+		canonical := domain.CanonicalBody(n.Body)
+		h := sha256.Sum256([]byte(canonical))
 		entries = append(entries, FSEntry{
 			ID:       n.ID,
 			FilePath: path,
